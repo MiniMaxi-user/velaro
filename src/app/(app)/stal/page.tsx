@@ -1,9 +1,18 @@
+import Link from 'next/link'
+
 export default function StalPage() {
   return (
-    <main style={{ padding: '40px' }}>
-      <p style={{ color: 'var(--velaro-color-muted)' }}>
-        Stal-dashboard — stap 4 van de bouwvolgorde.
-      </p>
+    <main className="page-container">
+      <div className="page-header">
+        <h1 className="page-title">
+          Mijn <em>Stal</em>
+        </h1>
+      </div>
+      <div style={{ display: 'flex', gap: 'var(--velaro-space-4)' }}>
+        <Link href="/stal/leden" className="btn-primary">
+          Leden beheren
+        </Link>
+      </div>
     </main>
   )
 }
