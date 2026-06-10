@@ -7,6 +7,7 @@ import { GESLACHT_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarde
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
 import { getVaccinaties, getOntwormingen, getDierenartsBezzoeken } from '@/features/gezondheid/queries'
 import DeleteGezondheidButton from '@/features/gezondheid/DeleteGezondheidButton'
+import type { Vaccination, Deworming, VetVisit } from '@prisma/client'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -118,7 +119,7 @@ export default async function PaardDetailPage({ params }: Props) {
               </tr>
             </thead>
             <tbody>
-              {vaccinaties.map((v) => (
+              {vaccinaties.map((v: Vaccination) => (
                 <tr key={v.id}>
                   <td>{formatDatum(new Date(v.date))}</td>
                   <td>{v.type}</td>
@@ -166,7 +167,7 @@ export default async function PaardDetailPage({ params }: Props) {
               </tr>
             </thead>
             <tbody>
-              {ontwormingen.map((o) => (
+              {ontwormingen.map((o: Deworming) => (
                 <tr key={o.id}>
                   <td>{formatDatum(new Date(o.date))}</td>
                   <td>{o.product}</td>
@@ -214,7 +215,7 @@ export default async function PaardDetailPage({ params }: Props) {
               </tr>
             </thead>
             <tbody>
-              {bezzoeken.map((b) => (
+              {bezzoeken.map((b: VetVisit) => (
                 <tr key={b.id}>
                   <td>{formatDatum(new Date(b.date))}</td>
                   <td className="gezondheid-tabel__muted">{b.vet ?? '—'}</td>
