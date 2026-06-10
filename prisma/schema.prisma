@@ -1,0 +1,123 @@
+// Velaro MVP — datamodel (stap 1)
+// Scope: pensionstal-beachhead, rond het centrale paardenprofiel.
+// Alleen de kern-entiteiten. Gezondheid/planning/facturatie volgen in latere stappen
+// en haken aan op Horse — nu nog NIET modelleren (premature complexiteit).
+//
+// Auth: Supabase Auth doet authenticatie. Elke User-rij spiegelt een auth-user:
+//   User.id == auth.users.id (uuid). Autorisatie regelen wij in de app-laag op basis
+//   van StableMember (stalrol) en HorseOwner (eigendom).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Gebruikers ──────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @db.Uuid // == Supabase auth user id
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Een gebruiker kan staf/eigenaar van stallen zijn én eigenaar van paarden.
+  stableMemberships StableMember[]
+  horseOwnerships   HorseOwner[]
+}
+
+// ── Stal (pensionbedrijf) ────────────────────────────────────────────────────
+
+model Stable {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  // Adres bewust plat gehouden voor de MVP.
+  address    String?
+  postalCode String?
+  city       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  members StableMember[]
+  horses  Horse[]
+}
+
+// Koppelt een gebruiker aan een stal met een rol (staf/eigenaar van de stal).
+// Dit bepaalt of iemand alle paarden ván die stal mag zien/beheren.
+model StableMember {
+  id        String     @id @default(uuid()) @db.Uuid
+  stableId  String     @db.Uuid
+  userId    String     @db.Uuid
+  role      StableRole
+  createdAt DateTime   @default(now())
+
+  stable Stable @relation(fields: [stableId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([stableId, userId])
+  @@index([userId])
+}
+
+enum StableRole {
+  OWNER // staleigenaar — volledige rechten binnen de stal
+  STAFF // stalmedewerker — beperktere rechten
+}
+
+// ── Paard (centraal profiel) ─────────────────────────────────────────────────
+
+model Horse {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  // Basisgegevens — uit te breiden, maar dit is de kern.
+  breed       String? // ras (bv. KWPN)
+  dateOfBirth DateTime?
+  sex         HorseSex?
+  color       String? // vachtkleur
+  chipNumber  String? // chip/UELN
+  boxNumber   String? // stalplek binnen de stal
+
+  // Een paard staat (in de MVP) op precies één pensionstal.
+  stableId String @db.Uuid
+  stable   Stable @relation(fields: [stableId], references: [id], onDelete: Restrict)
+
+  // Eigenaar(s) van het paard. Many-to-many via HorseOwner.
+  owners HorseOwner[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stableId])
+}
+
+enum HorseSex {
+  MARE     // merrie
+  STALLION // hengst
+  GELDING  // ruin
+}
+
+// Koppelt een paardeneigenaar aan een paard.
+// Dit bepaalt of iemand zijn/haar eigen paard mag zien (eigenaarstoegang).
+model HorseOwner {
+  id        String   @id @default(uuid()) @db.Uuid
+  horseId   String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  horse Horse @relation(fields: [horseId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([horseId, userId])
+  @@index([userId])
+}
+
+// ── Autorisatie-logica (in app-laag, niet in schema) ─────────────────────────
+// Mag gebruiker U paard H zien?
+//   - U is OWNER/STAFF van H.stable  (via StableMember), OF
+//   - U is eigenaar van H            (via HorseOwner).
+// Bewerken: stal OWNER/STAFF mag alles van paarden op hun stal;
+// paardeneigenaar krijgt (later) beperkte rechten op eigen paard.
