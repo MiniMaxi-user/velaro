@@ -85,9 +85,9 @@ export default function PaardForm({ horse }: Props) {
           <label htmlFor="chipNumber" className="form-label">Chipnummer</label>
           <input
             id="chipNumber" name="chipNumber" type="text" className="input"
-            placeholder="15 cijfers"
+            placeholder="15 cijfers (bv. 528246000XXXXXX)"
             defaultValue={horse?.chipNumber ?? ''}
-            maxLength={15}
+            maxLength={20}
           />
         </div>
 

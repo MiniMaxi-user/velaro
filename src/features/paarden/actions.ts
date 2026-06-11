@@ -25,9 +25,11 @@ function parseHorseFormData(formData: FormData) {
   const dateOfBirthStr = formData.get('dateOfBirth') as string
   const sexStr = formData.get('sex') as string
 
-  const chipNumber = (formData.get('chipNumber') as string)?.trim() || null
-  if (chipNumber && !/^\d{15}$/.test(chipNumber)) {
-    throw new Error('Chipnummer moet exact 15 cijfers bevatten')
+  const chipNumberRaw = (formData.get('chipNumber') as string)?.trim() || null
+  const chipNumberDigits = chipNumberRaw ? chipNumberRaw.replace(/\D/g, '') : null
+  const chipNumber = chipNumberDigits || null
+  if (chipNumber && chipNumber.length !== 15) {
+    throw new Error('Chipnummer moet exact 15 cijfers bevatten (spaties en streepjes worden automatisch verwijderd)')
   }
 
   const excludedFromConsumption = formData.get('excludedFromConsumption') === 'true'
