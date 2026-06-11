@@ -30,13 +30,18 @@ export default async function StallenPage() {
           <h1 className="page-title">Mijn <em>stallen</em></h1>
         </div>
         <div className="page-header-actions">
+          {!canCreate && memberships.length > 0 && (
+            <span style={{ fontSize: 13, color: 'var(--velaro-color-muted)', whiteSpace: 'nowrap' }}>
+              Limiet bereikt ({memberships.length}/{dbUser?.maxStables})
+            </span>
+          )}
           {canCreate ? (
             <Link href="/stallen/nieuw" className="btn-primary">+ Nieuwe stal</Link>
           ) : (
             <span
               className="btn-primary"
               style={{ opacity: 0.5, cursor: 'not-allowed' }}
-              title="Quotum bereikt"
+              title="Je hebt het maximale aantal stallen bereikt. Neem contact op met Velaro om je quotum te verhogen."
             >
               + Nieuwe stal
             </span>
@@ -58,12 +63,6 @@ export default async function StallenPage() {
           </div>
         </div>
       </div>
-
-      {!canCreate && memberships.length > 0 && (
-        <div className="form-feedback form-feedback--error" style={{ maxWidth: 520 }}>
-          Je hebt het maximale aantal stallen bereikt ({dbUser?.maxStables}). Neem contact op met Velaro om je quotum te verhogen.
-        </div>
-      )}
 
       {memberships.length === 0 ? (
         <div className="empty-state">
