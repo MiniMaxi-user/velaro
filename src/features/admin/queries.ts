@@ -82,10 +82,45 @@ export async function getAllHorses() {
 
 export async function getOwnerAccounts() {
   return prisma.user.findMany({
-    where: { isPlatformAdmin: false },
+    where: {
+      isPlatformAdmin: false,
+      maxStables: { gt: 0 },
+    },
     include: {
       _count: {
-        select: { stableMemberships: { where: { role: 'OWNER' } } },
+        select: {
+          stableMemberships: { where: { role: 'OWNER' } },
+        },
+      },
+      stableMemberships: {
+        where: { role: 'OWNER' },
+        include: { stable: { select: { id: true, name: true, city: true } } },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+export async function getHorseOwnerAccounts() {
+  return prisma.user.findMany({
+    where: {
+      isPlatformAdmin: false,
+      horseOwnerships: { some: {} },
+    },
+    include: {
+      _count: {
+        select: { horseOwnerships: true },
+      },
+      horseOwnerships: {
+        include: {
+          horse: {
+            select: {
+              id: true,
+              name: true,
+              stable: { select: { id: true, name: true } },
+            },
+          },
+        },
       },
     },
     orderBy: { createdAt: 'desc' },
