@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
+import TopbarUserMenu from './TopbarUserMenu'
 
 export default async function Topbar() {
   const supabase = await createClient()
@@ -26,7 +27,7 @@ export default async function Topbar() {
     <header className="topbar">
       <div className="topbar-search">
         <span className="topbar-search-icon">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.5"/>
             <path d="M8 8L11 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
@@ -42,10 +43,7 @@ export default async function Topbar() {
           </svg>
         </button>
         <div className="topbar-divider" />
-        <div className="topbar-user">
-          <div className="topbar-user-avatar">{initials}</div>
-          <span className="topbar-user-name">{displayName}</span>
-        </div>
+        <TopbarUserMenu initials={initials} displayName={displayName} />
       </div>
     </header>
   )
