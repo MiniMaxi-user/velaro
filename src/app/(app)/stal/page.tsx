@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
 import { getUserStable, getHorsesForStable } from '@/features/paarden/queries'
 import { getTaskCountsForDate } from '@/features/taken/queries'
-import { getStableRole, canCreateStable } from '@/lib/auth/authorization'
+import { getStableRole, canCreateStable, isPlatformAdmin } from '@/lib/auth/authorization'
 import { getAankomendGezondheidActies } from '@/features/gezondheid/queries'
 import AankomendZorgPanel from '@/features/gezondheid/AankomendZorgPanel'
 import { prisma } from '@/lib/prisma'
@@ -15,6 +15,10 @@ function toDateParam(d: Date) {
 export default async function StalPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
+
+  // Platform admins hebben hun eigen dashboard
+  const isAdmin = await isPlatformAdmin(user.id)
+  if (isAdmin) redirect('/admin')
 
   const [stable, canCreate] = await Promise.all([
     getUserStable(user.id),

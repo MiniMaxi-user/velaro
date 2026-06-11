@@ -12,9 +12,10 @@ const EIGENAAR_NAV = [
 ]
 
 const ADMIN_NAV = [
-  { href: '/admin/eigenaren', label: 'Eigenaren', icon: 'team',    exact: false },
-  { href: '/admin/stallen',   label: 'Stallen',   icon: 'stallen', exact: false },
-  { href: '/admin/paarden',   label: 'Paarden',   icon: 'horse',   exact: false },
+  { href: '/admin',           label: 'Dashboard',  icon: 'dashboard', exact: true  },
+  { href: '/admin/eigenaren', label: 'Eigenaren',  icon: 'team',      exact: false },
+  { href: '/admin/stallen',   label: 'Stallen',    icon: 'stallen',   exact: false },
+  { href: '/admin/paarden',   label: 'Paarden',    icon: 'horse',     exact: false },
 ]
 
 function NavIcon({ name }: { name: string }) {
