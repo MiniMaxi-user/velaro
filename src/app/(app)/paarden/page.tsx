@@ -98,7 +98,7 @@ export default async function PaardenPage() {
               </thead>
               <tbody>
                 {horses.map((horse) => (
-                  <tr key={horse.id} onClick={() => {}} style={{ cursor: 'pointer' }}>
+                  <tr key={horse.id}>
                     <td>
                       <Link href={`/paarden/${horse.id}`} className="cell-entity" style={{ textDecoration: 'none' }}>
                         <div className="cell-avatar">🐴</div>
