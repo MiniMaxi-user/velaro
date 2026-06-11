@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserStable, getHorsesForStable } from '@/features/paarden/queries'
 import { getTaskCountsForDate } from '@/features/taken/queries'
 import { getStableRole, canCreateStable } from '@/lib/auth/authorization'
+import { getAankomendGezondheidActies } from '@/features/gezondheid/queries'
+import AankomendZorgPanel from '@/features/gezondheid/AankomendZorgPanel'
 
 function toDateParam(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -39,14 +41,16 @@ export default async function StalPage() {
   }
 
   const today = new Date()
-  const [horses, role, takenVandaag] = await Promise.all([
+  const [horses, role, takenVandaag, zorgActies] = await Promise.all([
     getHorsesForStable(stable.id),
     getStableRole(user.id, stable.id),
     getTaskCountsForDate(stable.id, today),
+    getAankomendGezondheidActies(stable.id, 30),
   ])
 
   const isOwner = role === 'OWNER'
   const openTaken = takenVandaag.total - takenVandaag.completed
+  const verlopenZorg = zorgActies.filter((a) => a.isVerlopen).length
 
   return (
     <>
@@ -116,6 +120,24 @@ export default async function StalPage() {
             </div>
           </div>
         )}
+        {role !== null && (
+          <div className="kpi-card">
+            <div className={`kpi-card-icon ${verlopenZorg > 0 ? 'amber' : 'success'}`}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M9 3v5l3 3" stroke={verlopenZorg > 0 ? 'var(--velaro-color-warning)' : 'var(--velaro-color-success)'} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="9" cy="9" r="7" stroke={verlopenZorg > 0 ? 'var(--velaro-color-warning)' : 'var(--velaro-color-success)'} strokeWidth="1.4"/>
+              </svg>
+            </div>
+            <div className="kpi-card-body">
+              <div className="kpi-card-value" style={verlopenZorg > 0 ? { color: 'var(--velaro-color-warning)' } : undefined}>
+                {verlopenZorg > 0 ? verlopenZorg : zorgActies.length}
+              </div>
+              <div className="kpi-card-label">
+                {verlopenZorg > 0 ? 'Verlopen zorg' : 'Aankomende zorg (30d)'}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick actions */}
@@ -156,6 +178,11 @@ export default async function StalPage() {
           </Link>
         )}
       </div>
+
+      {/* Aankomende zorg */}
+      {role !== null && (
+        <AankomendZorgPanel acties={zorgActies} />
+      )}
 
       {/* Stalbewoners */}
       {horses.length > 0 && (
