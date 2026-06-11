@@ -1,6 +1,7 @@
 import { getAuthUser, getDbUser } from '@/lib/auth/session'
 import { prisma } from '@/lib/prisma'
 import { getActiveStableId } from '@/lib/active-stable'
+import { getMemberships } from '@/lib/auth/authorization'
 import SidebarClient from './SidebarClient'
 
 const ROL_LABELS: Record<string, string> = {
@@ -14,12 +15,11 @@ export default async function Sidebar() {
   if (!user) return null
 
   const [dbUser, memberships, activeStableId] = await Promise.all([
-    getDbUser(user.id),
-    prisma.stableMember.findMany({
-      where: { userId: user.id },
-      include: { stable: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'asc' },
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { name: true, isPlatformAdmin: true, maxStables: true },
     }),
+    getMemberships(user.id),
     getActiveStableId(user.id),
   ])
 
