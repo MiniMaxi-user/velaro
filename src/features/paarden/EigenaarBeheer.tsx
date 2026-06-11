@@ -16,21 +16,20 @@ export default function EigenaarBeheer({ horseId, owners }: { horseId: string; o
     setAddError(null)
     const fd = new FormData(e.currentTarget)
     startAdd(async () => {
-      try {
-        await addHorseOwner(horseId, fd)
+      const result = await addHorseOwner(horseId, fd)
+      if (result?.error) {
+        setAddError(result.error)
+      } else {
         formRef.current?.reset()
-      } catch (err) {
-        setAddError(err instanceof Error ? err.message : 'Er is een fout opgetreden')
       }
     })
   }
 
   async function handleRemove(ownershipId: string) {
     setRemoveError(null)
-    try {
-      await removeHorseOwner(horseId, ownershipId)
-    } catch (err) {
-      setRemoveError(err instanceof Error ? err.message : 'Er is een fout opgetreden')
+    const result = await removeHorseOwner(horseId, ownershipId)
+    if (result?.error) {
+      setRemoveError(result.error)
     }
   }
 

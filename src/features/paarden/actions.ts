@@ -88,40 +88,46 @@ export async function updateHorse(id: string, formData: FormData) {
   redirect(`/paarden/${id}`)
 }
 
-export async function addHorseOwner(horseId: string, formData: FormData) {
+export async function addHorseOwner(
+  horseId: string,
+  formData: FormData
+): Promise<{ error: string } | undefined> {
   const user = await getCurrentUser()
 
   const horse = await prisma.horse.findUnique({ where: { id: horseId } })
-  if (!horse) throw new Error('Paard niet gevonden')
+  if (!horse) return { error: 'Paard niet gevonden' }
 
   const role = await getStableRole(user.id, horse.stableId)
-  if (!role) throw new Error('Geen toegang')
+  if (!role) return { error: 'Geen toegang' }
 
   const email = (formData.get('email') as string)?.trim().toLowerCase()
-  if (!email) throw new Error('E-mailadres is verplicht')
+  if (!email) return { error: 'E-mailadres is verplicht' }
 
   const targetUser = await prisma.user.findUnique({ where: { email } })
   if (!targetUser)
-    throw new Error(`Geen account gevonden voor ${email}. Vraag deze persoon eerst in te loggen op Velaro.`)
+    return { error: `Geen account gevonden voor ${email}. Vraag deze persoon eerst in te loggen op Velaro.` }
 
   const existing = await prisma.horseOwner.findUnique({
     where: { horseId_userId: { horseId, userId: targetUser.id } },
   })
-  if (existing) throw new Error('Deze gebruiker is al eigenaar van dit paard')
+  if (existing) return { error: 'Deze gebruiker is al eigenaar van dit paard' }
 
   await prisma.horseOwner.create({ data: { horseId, userId: targetUser.id } })
 
   revalidatePath(`/paarden/${horseId}`)
 }
 
-export async function removeHorseOwner(horseId: string, ownershipId: string) {
+export async function removeHorseOwner(
+  horseId: string,
+  ownershipId: string
+): Promise<{ error: string } | undefined> {
   const user = await getCurrentUser()
 
   const horse = await prisma.horse.findUnique({ where: { id: horseId } })
-  if (!horse) throw new Error('Paard niet gevonden')
+  if (!horse) return { error: 'Paard niet gevonden' }
 
   const role = await getStableRole(user.id, horse.stableId)
-  if (!role) throw new Error('Geen toegang')
+  if (!role) return { error: 'Geen toegang' }
 
   await prisma.horseOwner.delete({ where: { id: ownershipId } })
 
