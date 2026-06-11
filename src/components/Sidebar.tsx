@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { getActiveStableId } from '@/lib/active-stable'
+import { getMemberships } from '@/lib/auth/authorization'
 import SidebarClient from './SidebarClient'
 
 const ROL_LABELS: Record<string, string> = {
@@ -19,11 +20,7 @@ export default async function Sidebar() {
       where: { id: user.id },
       select: { name: true, isPlatformAdmin: true, maxStables: true },
     }),
-    prisma.stableMember.findMany({
-      where: { userId: user.id },
-      include: { stable: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'asc' },
-    }),
+    getMemberships(user.id),
     getActiveStableId(user.id),
   ])
 
