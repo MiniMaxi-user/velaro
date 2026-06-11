@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useActionState } from 'react'
 import type { Horse } from '@prisma/client'
 import { createHorse, updateHorse } from './actions'
 import { GESLACHT_LABELS, DISCIPLINE_OPTIES, formatDateForInput } from './paardHelpers'
@@ -11,13 +11,30 @@ interface Props {
   horse?: Horse
 }
 
+type State = { error?: string }
+
 export default function PaardForm({ horse }: Props) {
-  const action = horse ? updateHorse.bind(null, horse.id) : createHorse
+  const serverAction = horse ? updateHorse.bind(null, horse.id) : createHorse
   const cancelHref = horse ? `/paarden/${horse.id}` : '/paarden'
   const [uitgesloten, setUitgesloten] = useState(horse?.excludedFromConsumption ?? false)
 
+  async function action(prev: State, formData: FormData): Promise<State> {
+    try {
+      await serverAction(formData)
+      return {}
+    } catch (e) {
+      if ((e as { digest?: string }).digest?.startsWith('NEXT_REDIRECT')) throw e
+      return { error: (e as Error).message }
+    }
+  }
+
+  const [state, formAction] = useActionState(action, {})
+
   return (
-    <form action={action} className="form-card">
+    <form action={formAction} className="form-card">
+      {state.error && (
+        <div className="form-feedback form-feedback--error">{state.error}</div>
+      )}
 
       {/* ── Sectie: Algemeen ── */}
       <div className="profiel-sectie-label">Algemeen</div>
