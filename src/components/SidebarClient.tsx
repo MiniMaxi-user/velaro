@@ -125,25 +125,17 @@ export default function SidebarClient({
 
       {/* Stable switcher */}
       {stables.length > 1 && !collapsed && (
-        <div style={{ padding: '0 var(--velaro-space-4) var(--velaro-space-3)' }}>
+        <div className="stalswitcher">
+          <span className="stalswitcher-label">Actieve stal</span>
           <form ref={switchFormRef} action={switchActiveStable}>
             <select
               name="stableId"
               defaultValue={activeStableId ?? ''}
               onChange={() => switchFormRef.current?.requestSubmit()}
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'rgba(255,255,255,0.08)',
-                color: 'inherit',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
+              className="stalswitcher-select"
             >
               {stables.map((s) => (
-                <option key={s.id} value={s.id} style={{ background: 'var(--velaro-color-navy)', color: '#fff' }}>
+                <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
               ))}
