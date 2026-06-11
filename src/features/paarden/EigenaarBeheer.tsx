@@ -29,7 +29,8 @@ export default function EigenaarBeheer({ horseId, owners }: {
     })
   }
 
-  async function handleRemove(ownershipId: string) {
+  async function handleRemove(ownershipId: string, naam: string) {
+    if (!confirm('Weet je zeker dat je ' + naam + ' als eigenaar wilt ontkoppelen?')) return
     setRemoveError(null)
     const result = await removeHorseOwner(horseId, ownershipId)
     if (result?.error) {
@@ -63,7 +64,7 @@ export default function EigenaarBeheer({ horseId, owners }: {
                   <button
                     type="button"
                     className="btn-danger btn-danger--sm"
-                    onClick={() => handleRemove(o.id)}
+                    onClick={() => handleRemove(o.id, o.user.name ?? o.user.email)}
                   >
                     Ontkoppelen
                   </button>
