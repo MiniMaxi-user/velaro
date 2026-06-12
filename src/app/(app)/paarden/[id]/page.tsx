@@ -119,6 +119,8 @@ export default async function PaardDetailPage({ params }: Props) {
                 <Veld label="Stalplek / Box" waarde={horse.boxNumber} />
                 <Veld label="Discipline" waarde={horse.discipline} />
                 {horse.disciplineLevel && <Veld label="Niveau" waarde={horse.disciplineLevel} />}
+                <Veld label="Vader" waarde={horse.sireName} />
+                <Veld label="Moeder" waarde={horse.damName} />
               </div>
             </div>
           </div>
@@ -138,20 +140,6 @@ export default async function PaardDetailPage({ params }: Props) {
             </div>
           </div>
         )
-
-        const afstammingPanel = (horse.sireName || horse.damName) ? (
-          <div className="panel">
-            <div className="panel-header">
-              <span className="panel-title">Afstamming</span>
-            </div>
-            <div className="panel-body">
-              <div className="detail-fields">
-                <Veld label="Vader" waarde={horse.sireName} />
-                <Veld label="Moeder" waarde={horse.damName} />
-              </div>
-            </div>
-          </div>
-        ) : null
 
         const welzijnPanel = (
           <div className="panel">
@@ -212,12 +200,7 @@ export default async function PaardDetailPage({ params }: Props) {
             <div className="detail-tabs-layout">
               {/* Linkerkolom (70%) — tabstrip */}
               <PaardDetailTabs
-                algemeen={
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {algemeenPanel}
-                    {afstammingPanel}
-                  </div>
-                }
+                algemeen={algemeenPanel}
                 gezondheid={gezondheidPanel}
                 eigenaren={
                   <div className="panel">
@@ -249,7 +232,6 @@ export default async function PaardDetailPage({ params }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {algemeenPanel}
               {identificatiePanel}
-              {afstammingPanel}
               {voederschemaPanel}
               {gezondheidPanel}
               {berichtenPanel}
