@@ -176,3 +176,53 @@ export async function updateDierenartsBeezoek(id: string, horseId: string, formD
   revalidatePath(`/paarden/${horseId}`)
   redirect(`/paarden/${horseId}`)
 }
+
+export async function createHoefsmitBezoek(horseId: string, formData: FormData) {
+  await getAuthorizedUser(horseId)
+
+  const dateStr = formData.get('date') as string
+  const nextDateStr = formData.get('nextDate') as string
+
+  if (!dateStr) throw new Error('Datum is verplicht')
+
+  await prisma.hoefsmitBezoek.create({
+    data: {
+      horseId,
+      date: new Date(dateStr),
+      hoefsmid: (formData.get('hoefsmid') as string)?.trim() || null,
+      nextDate: nextDateStr ? new Date(nextDateStr) : null,
+      notes: (formData.get('notes') as string)?.trim() || null,
+    },
+  })
+
+  revalidatePath(`/paarden/${horseId}`)
+  redirect(`/paarden/${horseId}`)
+}
+
+export async function updateHoefsmitBezoek(id: string, horseId: string, formData: FormData) {
+  await getAuthorizedUser(horseId)
+
+  const dateStr = formData.get('date') as string
+  const nextDateStr = formData.get('nextDate') as string
+
+  if (!dateStr) throw new Error('Datum is verplicht')
+
+  await prisma.hoefsmitBezoek.update({
+    where: { id },
+    data: {
+      date: new Date(dateStr),
+      hoefsmid: (formData.get('hoefsmid') as string)?.trim() || null,
+      nextDate: nextDateStr ? new Date(nextDateStr) : null,
+      notes: (formData.get('notes') as string)?.trim() || null,
+    },
+  })
+
+  revalidatePath(`/paarden/${horseId}`)
+  redirect(`/paarden/${horseId}`)
+}
+
+export async function deleteHoefsmitBezoek(id: string, horseId: string) {
+  await getAuthorizedUser(horseId)
+  await prisma.hoefsmitBezoek.delete({ where: { id } })
+  revalidatePath(`/paarden/${horseId}`)
+}

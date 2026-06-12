@@ -1820,6 +1820,45 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.5; }
   margin-top: 8px;
 }
 
+/* Zorgtype badges op taken */
+.zorg-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid;
+  margin-left: 6px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
+.zorg-badge[data-type="vaccinatie"] {
+  background: rgba(59,130,246,0.1);
+  border-color: rgba(59,130,246,0.25);
+  color: #2563eb;
+}
+
+.zorg-badge[data-type="ontworming"] {
+  background: rgba(34,197,94,0.1);
+  border-color: rgba(34,197,94,0.25);
+  color: #16a34a;
+}
+
+.zorg-badge[data-type="dierenarts"] {
+  background: rgba(239,68,68,0.1);
+  border-color: rgba(239,68,68,0.25);
+  color: #dc2626;
+}
+
+.zorg-badge[data-type="hoefsmit"] {
+  background: rgba(242,173,117,0.15);
+  border-color: rgba(242,173,117,0.35);
+  color: #b45309;
+}
+
 /* Taak form */
 .taak-form {
   background: var(--velaro-color-surf-1);

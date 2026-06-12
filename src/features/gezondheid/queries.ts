@@ -4,7 +4,7 @@ export type GezondheidActie = {
   id: string
   horseId: string
   horseName: string
-  type: 'vaccinatie' | 'ontworming'
+  type: 'vaccinatie' | 'ontworming' | 'hoefsmit'
   omschrijving: string
   nextDate: Date
   isVerlopen: boolean
@@ -20,7 +20,7 @@ export async function getAankomendGezondheidActies(
   const grens = new Date(vandaag)
   grens.setDate(grens.getDate() + dagenVooruit)
 
-  const [vaccinaties, ontwormingen] = await Promise.all([
+  const [vaccinaties, ontwormingen, hoefsmitBezoeKen] = await Promise.all([
     prisma.vaccination.findMany({
       where: {
         nextDate: { lte: grens },
@@ -29,6 +29,13 @@ export async function getAankomendGezondheidActies(
       include: { horse: { select: { id: true, name: true } } },
     }),
     prisma.deworming.findMany({
+      where: {
+        nextDate: { lte: grens },
+        horse: { stableId },
+      },
+      include: { horse: { select: { id: true, name: true } } },
+    }),
+    prisma.hoefsmitBezoek.findMany({
       where: {
         nextDate: { lte: grens },
         horse: { stableId },
@@ -59,6 +66,17 @@ export async function getAankomendGezondheidActies(
         omschrijving: d.product,
         nextDate: d.nextDate!,
         isVerlopen: d.nextDate! < vandaag,
+      })),
+    ...hoefsmitBezoeKen
+      .filter((h) => h.nextDate !== null)
+      .map((h) => ({
+        id: h.id,
+        horseId: h.horse.id,
+        horseName: h.horse.name,
+        type: 'hoefsmit' as const,
+        omschrijving: h.hoefsmid ? `Hoefsmid: ${h.hoefsmid}` : 'Hoefsmit',
+        nextDate: h.nextDate!,
+        isVerlopen: h.nextDate! < vandaag,
       })),
   ]
 
@@ -98,4 +116,15 @@ export async function getDierenartsBezzoeken(horseId: string) {
 
 export async function getDierenartsBeezoek(id: string) {
   return prisma.vetVisit.findUnique({ where: { id } })
+}
+
+export async function getHoefsmitBezoeKen(horseId: string) {
+  return prisma.hoefsmitBezoek.findMany({
+    where: { horseId },
+    orderBy: { date: 'desc' },
+  })
+}
+
+export async function getHoefsmitBezoek(id: string) {
+  return prisma.hoefsmitBezoek.findUnique({ where: { id } })
 }

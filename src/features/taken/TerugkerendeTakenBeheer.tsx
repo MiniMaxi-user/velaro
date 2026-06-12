@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { createRecurringTask, deleteRecurringTask } from './actions'
-import type { RecurringFreq } from '@prisma/client'
+import type { RecurringFreq, ZorgType } from '@prisma/client'
 
 type Horse = { id: string; name: string }
 
@@ -12,7 +12,15 @@ type RecurringTask = {
   frequency: RecurringFreq
   dayOfWeek: number | null
   dayOfMonth: number | null
+  zorgType: ZorgType | null
   horse: { id: string; name: string } | null
+}
+
+const ZORG_TYPE_LABELS: Record<ZorgType, string> = {
+  VACCINATIE: 'Vaccinatie',
+  ONTWORMING: 'Ontworming',
+  DIERENARTS: 'Dierenarts',
+  HOEFSMIT: 'Hoefsmit',
 }
 
 const WEEKDAGEN = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag']
@@ -93,7 +101,14 @@ export default function TerugkerendeTakenBeheer({
               {recurringTasks.map((t) => (
                 <div key={t.id} className="taak-item">
                   <div className="taak-item__body">
-                    <span className="taak-item__title">{t.title}</span>
+                    <span className="taak-item__title">
+                      {t.title}
+                      {t.zorgType && (
+                        <span className="zorg-badge" data-type={t.zorgType.toLowerCase()}>
+                          {ZORG_TYPE_LABELS[t.zorgType]}
+                        </span>
+                      )}
+                    </span>
                     <span className="taak-item__paard">
                       {frequentieLabel(t)}{t.horse ? ` · ${t.horse.name}` : ''}
                     </span>
@@ -127,15 +142,28 @@ export default function TerugkerendeTakenBeheer({
                 </div>
               )}
 
-              <div className="form-group">
-                <label className="form-label">Omschrijving</label>
-                <input
-                  name="title"
-                  className="input"
-                  placeholder="Bijv. Paarden voeren"
-                  required
-                  autoComplete="off"
-                />
+              <div className="form-row" style={{ gap: 'var(--velaro-space-3)' }}>
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label className="form-label">Omschrijving</label>
+                  <input
+                    name="title"
+                    className="input"
+                    placeholder="Bijv. Paarden voeren"
+                    required
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Zorgtype (optioneel)</label>
+                  <select name="zorgType" className="input">
+                    <option value="">Geen (gewone taak)</option>
+                    <option value="VACCINATIE">Vaccinatie</option>
+                    <option value="ONTWORMING">Ontworming</option>
+                    <option value="DIERENARTS">Dierenarts</option>
+                    <option value="HOEFSMIT">Hoefsmit</option>
+                  </select>
+                </div>
               </div>
 
               <div className="form-row" style={{ gap: 'var(--velaro-space-3)' }}>

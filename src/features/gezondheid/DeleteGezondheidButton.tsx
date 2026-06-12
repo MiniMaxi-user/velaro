@@ -1,9 +1,9 @@
 'use client'
 
 import { useTransition } from 'react'
-import { deleteVaccinatie, deleteOntworming, deleteDierenartsBeezoek } from './actions'
+import { deleteVaccinatie, deleteOntworming, deleteDierenartsBeezoek, deleteHoefsmitBezoek } from './actions'
 
-type GezondheidType = 'vaccinatie' | 'ontworming' | 'dierenarts'
+type GezondheidType = 'vaccinatie' | 'ontworming' | 'dierenarts' | 'hoefsmit'
 
 interface Props {
   id: string
@@ -15,6 +15,7 @@ const DELETE_FNS = {
   vaccinatie: deleteVaccinatie,
   ontworming: deleteOntworming,
   dierenarts: deleteDierenartsBeezoek,
+  hoefsmit: deleteHoefsmitBezoek,
 }
 
 export default function DeleteGezondheidButton({ id, horseId, type }: Props) {

@@ -133,11 +133,15 @@ export async function ensureRecurringTasksForDate(stableId: string, date: Date) 
           horseId: template.horseId ?? null,
           title: template.title,
           date: taskDate,
+          zorgType: template.zorgType ?? null,
         },
       })
     }
   }
 }
+
+const VALID_ZORG_TYPES = ['VACCINATIE', 'ONTWORMING', 'DIERENARTS', 'HOEFSMIT'] as const
+type ZorgTypeValue = typeof VALID_ZORG_TYPES[number]
 
 export async function createRecurringTask(
   formData: FormData
@@ -147,11 +151,17 @@ export async function createRecurringTask(
   const title = (formData.get('title') as string)?.trim()
   const frequency = formData.get('frequency') as string
   const horseId = (formData.get('horseId') as string) || null
+  const zorgTypeRaw = (formData.get('zorgType') as string) || null
 
   if (!title) return { error: 'Omschrijving is verplicht' }
   if (!['DAILY', 'WEEKLY', 'MONTHLY'].includes(frequency)) {
     return { error: 'Ongeldige frequentie' }
   }
+
+  const zorgType: ZorgTypeValue | null =
+    zorgTypeRaw && VALID_ZORG_TYPES.includes(zorgTypeRaw as ZorgTypeValue)
+      ? (zorgTypeRaw as ZorgTypeValue)
+      : null
 
   let dayOfWeek: number | null = null
   let dayOfMonth: number | null = null
@@ -176,6 +186,7 @@ export async function createRecurringTask(
       frequency: frequency as 'DAILY' | 'WEEKLY' | 'MONTHLY',
       dayOfWeek,
       dayOfMonth,
+      zorgType,
     },
   })
 

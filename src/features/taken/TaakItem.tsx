@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { toggleTask, deleteTask, updateTask } from './actions'
+import type { ZorgType } from '@prisma/client'
 
 type Horse = { id: string; name: string }
 
@@ -10,7 +11,15 @@ type Task = {
   title: string
   date: Date
   isCompleted: boolean
+  zorgType: ZorgType | null
   horse: { id: string; name: string } | null
+}
+
+const ZORG_TYPE_LABELS: Record<ZorgType, string> = {
+  VACCINATIE: 'Vaccinatie',
+  ONTWORMING: 'Ontworming',
+  DIERENARTS: 'Dierenarts',
+  HOEFSMIT: 'Hoefsmit',
 }
 
 export default function TaakItem({ task, horses }: { task: Task; horses: Horse[] }) {
@@ -109,7 +118,14 @@ export default function TaakItem({ task, horses }: { task: Task; horses: Horse[]
         {task.isCompleted ? '✓' : ''}
       </button>
       <div className="taak-item__body">
-        <span className="taak-item__title">{task.title}</span>
+        <span className="taak-item__title">
+          {task.title}
+          {task.zorgType && (
+            <span className="zorg-badge" data-type={task.zorgType.toLowerCase()}>
+              {ZORG_TYPE_LABELS[task.zorgType]}
+            </span>
+          )}
+        </span>
         {task.horse && (
           <span className="taak-item__paard">{task.horse.name}</span>
         )}

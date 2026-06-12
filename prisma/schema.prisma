@@ -125,12 +125,13 @@ model Horse {
   owners HorseOwner[]
 
   // Gezondheidsregistratie (stap 3)
-  vaccinations   Vaccination[]
-  dewormings     Deworming[]
-  vetVisits      VetVisit[]
-  tasks          Task[]
-  stableNotes    StableNote[]
-  recurringTasks RecurringTask[]
+  vaccinations    Vaccination[]
+  dewormings      Deworming[]
+  vetVisits       VetVisit[]
+  hoefsmitBezoeken HoefsmitBezoek[]
+  tasks           Task[]
+  stableNotes     StableNote[]
+  recurringTasks  RecurringTask[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -213,6 +214,7 @@ model Task {
   date        DateTime  @db.Date
   isCompleted Boolean   @default(false)
   completedAt DateTime?
+  zorgType    ZorgType?
   createdAt   DateTime  @default(now())
 
   stable Stable  @relation(fields: [stableId], references: [id], onDelete: Cascade)
@@ -253,12 +255,37 @@ model RecurringTask {
   dayOfWeek  Int?          // 0=ma t/m 6=zo; alleen bij WEEKLY
   dayOfMonth Int?          // 1-28; alleen bij MONTHLY
   isActive   Boolean       @default(true)
+  zorgType   ZorgType?
   createdAt  DateTime      @default(now())
 
   stable Stable  @relation(fields: [stableId], references: [id], onDelete: Cascade)
   horse  Horse?  @relation(fields: [horseId], references: [id], onDelete: SetNull)
 
   @@index([stableId])
+}
+
+// ── Hoefsmitbezoeken ─────────────────────────────────────────────────────────
+
+model HoefsmitBezoek {
+  id        String    @id @default(uuid()) @db.Uuid
+  horseId   String    @db.Uuid
+  horse     Horse     @relation(fields: [horseId], references: [id], onDelete: Cascade)
+  date      DateTime
+  hoefsmid  String?
+  nextDate  DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([horseId])
+}
+
+// ── Zorgtype enum ─────────────────────────────────────────────────────────────
+
+enum ZorgType {
+  VACCINATIE
+  ONTWORMING
+  DIERENARTS
+  HOEFSMIT
 }
 
 // ── Autorisatie-logica (in app-laag, niet in schema) ─────────────────────────

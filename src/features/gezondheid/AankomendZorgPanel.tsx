@@ -58,7 +58,7 @@ export default function AankomendZorgPanel({ acties }: Props) {
                     {actie.horseName}
                   </Link>
                   <span style={{ color: 'var(--velaro-color-muted)', marginLeft: 6 }}>
-                    {actie.type === 'vaccinatie' ? 'Vaccinatie' : 'Ontworming'}
+                    {actie.type === 'vaccinatie' ? 'Vaccinatie' : actie.type === 'ontworming' ? 'Ontworming' : 'Hoefsmit'}
                     {actie.omschrijving ? ` — ${actie.omschrijving}` : ''}
                   </span>
                 </div>

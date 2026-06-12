@@ -6,7 +6,7 @@ import { getStableRole, canViewHorse } from '@/lib/auth/authorization'
 import { GESLACHT_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
 import EigenaarBeheer from '@/features/paarden/EigenaarBeheer'
-import { getVaccinaties, getOntwormingen, getDierenartsBezzoeken } from '@/features/gezondheid/queries'
+import { getVaccinaties, getOntwormingen, getDierenartsBezzoeken, getHoefsmitBezoeKen } from '@/features/gezondheid/queries'
 import GezondheidTabs from '@/features/gezondheid/GezondheidTabs'
 import { getNotesForHorse } from '@/features/mededelingen/queries'
 import MededelingenSectie from '@/features/mededelingen/MededelingenSectie'
@@ -34,12 +34,13 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, notes] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, notes] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
     getOntwormingen(id),
     getDierenartsBezzoeken(id),
+    getHoefsmitBezoeKen(id),
     getNotesForHorse(id),
   ])
 
@@ -145,12 +146,13 @@ export default async function PaardDetailPage({ params }: Props) {
             </div>
           )}
 
-          {/* Gezondheid (Vaccinaties / Ontworming / Dierenarts) */}
+          {/* Gezondheid (Vaccinaties / Ontworming / Dierenarts / Hoefsmit) */}
           <GezondheidTabs
             horseId={id}
             vaccinaties={vaccinaties}
             ontwormingen={ontwormingen}
             bezzoeken={bezzoeken}
+            hoefsmitBezoeKen={hoefsmitBezoeKen}
             canEdit={canEdit}
           />
 
