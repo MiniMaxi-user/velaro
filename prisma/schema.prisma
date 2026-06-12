@@ -32,6 +32,7 @@ model User {
   stableMemberships StableMember[]
   horseOwnerships   HorseOwner[]
   stableNotes       StableNote[]
+  stableNoteReads   StableNoteRead[]
 }
 
 // ── Stal (pensionbedrijf) ────────────────────────────────────────────────────
@@ -234,8 +235,22 @@ model StableNote {
 
   horse  Horse @relation(fields: [horseId], references: [id], onDelete: Cascade)
   author User  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reads  StableNoteRead[]
 
   @@index([horseId])
+}
+
+model StableNoteRead {
+  id        String   @id @default(uuid()) @db.Uuid
+  noteId    String   @db.Uuid
+  userId    String   @db.Uuid
+  readAt    DateTime @default(now())
+
+  note StableNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, userId])
+  @@index([userId])
 }
 
 // ── Terugkerende taken ───────────────────────────────────────────────────────

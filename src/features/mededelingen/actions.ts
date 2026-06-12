@@ -74,3 +74,30 @@ export async function deleteNote(id: string, horseId: string) {
   await prisma.stableNote.delete({ where: { id } })
   revalidatePath(`/paarden/${horseId}`)
 }
+
+export async function markNotesAsRead(horseId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  // Alleen eigenaren van dit paard mogen markeren
+  const isOwner = await prisma.horseOwner.findFirst({
+    where: { horseId, userId: user.id },
+  })
+  if (!isOwner) return
+
+  const notes = await prisma.stableNote.findMany({
+    where: { horseId },
+    select: { id: true },
+  })
+
+  await prisma.$transaction(
+    notes.map((n) =>
+      prisma.stableNoteRead.upsert({
+        where: { noteId_userId: { noteId: n.id, userId: user.id } },
+        create: { noteId: n.id, userId: user.id },
+        update: {},
+      })
+    )
+  )
+}

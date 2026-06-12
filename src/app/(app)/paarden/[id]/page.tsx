@@ -10,6 +10,7 @@ import { getVaccinaties, getOntwormingen, getDierenartsBezzoeken, getHoefsmitBez
 import GezondheidTabs from '@/features/gezondheid/GezondheidTabs'
 import { getNotesForHorse } from '@/features/mededelingen/queries'
 import MededelingenSectie from '@/features/mededelingen/MededelingenSectie'
+import { markNotesAsRead } from '@/features/mededelingen/actions'
 import StalGegevensPanel from '@/features/paarden/StalGegevensPanel'
 
 interface Props {
@@ -45,6 +46,12 @@ export default async function PaardDetailPage({ params }: Props) {
   ])
 
   if (!canView) notFound()
+
+  // Markeer mededelingen als gelezen voor paardeneigenaren
+  const isHorseOwner = !role && canView
+  if (isHorseOwner) {
+    await markNotesAsRead(id)
+  }
 
   const canEdit = role !== null
   const canDelete = role === 'OWNER'

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
 import { getHorsesForOwner } from '@/features/paarden/queries'
-import { getNotesForHorse } from '@/features/mededelingen/queries'
+import { getNotesForHorse, getUnreadCountForOwner } from '@/features/mededelingen/queries'
 import { berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
 
 export default async function EigenaarPage() {
@@ -11,10 +11,11 @@ export default async function EigenaarPage() {
 
   const horses = await getHorsesForOwner(user.id)
 
-  // Laad de laatste 2 mededelingen per paard parallel
-  const notesPerPaard = await Promise.all(
-    horses.map((horse) => getNotesForHorse(horse.id, 2))
-  )
+  // Laad de laatste 2 mededelingen en ongelezen-tellers per paard parallel
+  const [notesPerPaard, ongelezen] = await Promise.all([
+    Promise.all(horses.map((h) => getNotesForHorse(h.id, 2))),
+    Promise.all(horses.map((h) => getUnreadCountForOwner(user.id, h.id))),
+  ])
 
   return (
     <>
@@ -44,7 +45,14 @@ export default async function EigenaarPage() {
               <div key={horse.id} className="panel">
                 <div className="panel-header">
                   <div>
-                    <span className="panel-title">{horse.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="panel-title">{horse.name}</span>
+                      {ongelezen[index].ongelezen > 0 && (
+                        <span className="badge badge-warning">
+                          {ongelezen[index].ongelezen} nieuw
+                        </span>
+                      )}
+                    </div>
                     <div className="detail-meta" style={{ marginTop: 6 }}>
                       {horse.breed && <span className="badge badge-navy">{horse.breed}</span>}
                       {leeftijd !== null && <span className="badge badge-neutral">{leeftijd} jaar</span>}
