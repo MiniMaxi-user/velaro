@@ -1,3 +1,10 @@
 {
-  "regions": ["arn1"]
+  "regions": ["arn1"],
+      "crons": [
+        {
+          "path": "/api/orchestrator",
+          "schedule": "*/5 * * * *"
+        }
+      ]
+    
 }
