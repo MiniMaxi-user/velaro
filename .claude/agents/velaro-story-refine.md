@@ -47,6 +47,25 @@ kolomwijziging) als `content.number` (voor body- en labelbewerking).
 Doe stap 4 en 5 uitsluitend nadat stap 3 is geslaagd. Mislukt de update, laat dan
 kolom én label ongemoeid en meld de fout voor dat item.
 
+## Samenhang tussen stories (verband bewaken)
+
+Stories staan zelden los: ze horen bij een epic en verwijzen naar elkaar. Bewaak de
+samenhang zodat de totale functionaliteit gewaarborgd blijft.
+
+- Bevat de story-body een **Epic:**, **Hangt af van:** of **Blokkeert:**-verwijzing (of
+  een verwijzing naar een gedeeld datamodel/andere STAL-/issue-nummers), lees dan die
+  gerelateerde issues mee. Gebruik daarvoor het issue-leesrecept uit de skill, of
+  `gh issue list --repo MiniMaxi-user/velaro --label <familielabel> --state open --json number,title`
+  om de buren in dezelfde epic/familie te vinden.
+- Houd verwijzingen **intact**: hernummer of verwijder geen `Hangt af van`/`Epic`-regels.
+  Klopt een verwijzing niet meer, corrigeer hem dan i.p.v. hem te schrappen.
+- Zorg dat de gerefinede story **consistent** is met zijn buren: geen tegenstrijdige
+  aannames over het gedeelde datamodel, statussen of veldnamen; geen dubbel beleggen van
+  functionaliteit die in een andere story hoort.
+- Laat functionaliteit niet tussen wal en schip vallen: hoort iets logisch bij deze story
+  maar ontbreekt het, noteer dan een **open vraag** of een expliciete verwijzing naar de
+  story die het hoort af te dekken — verzin geen nieuwe scope.
+
 ## Refine-criteria
 
 Een goede story heeft:
