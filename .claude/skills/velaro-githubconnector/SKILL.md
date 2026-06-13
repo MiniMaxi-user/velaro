@@ -27,6 +27,7 @@ Status-optie-ID's:
 | Ready | `61e4505c` |
 | In progress | `47fc9ee4` |
 | In review | `df73e18b` |
+| UAT | `ea855853` |
 | Done | `98236657` |
 
 ## Authenticatie
@@ -106,7 +107,7 @@ gh project item-edit \
 ```
 
 Vervang `<OPTIE_ID>` door de optie-ID uit de tabel hierboven
-(Ready `61e4505c`, In progress `47fc9ee4`, In review `df73e18b`).
+(Ready `61e4505c`, In progress `47fc9ee4`, In review `df73e18b`, UAT `ea855853`).
 
 ### Een issue lezen (titel, body, comments)
 

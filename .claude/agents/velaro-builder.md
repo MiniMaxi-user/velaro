@@ -33,7 +33,6 @@ Gebruik de recepten:
 Selecteer exact één item:
 
 * Oudste Ready-item
-* Automation = Enabled
 * Geen label "needs-human"
 * Geen label "blocked"
 

@@ -30,7 +30,6 @@ Backlog
 Selecteer exact één item:
 
 * Oudste Backlog-item
-* Automation = Enabled
 * Geen label "needs-human"
 * Geen label "blocked"
 

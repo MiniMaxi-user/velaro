@@ -30,8 +30,8 @@ In Review
 Selecteer exact één item:
 
 * Oudste In Review-item
-* Automation = Enabled
 * Geen label "needs-human"
+* Geen label "blocked"
 
 Geen geschikt item gevonden?
 
