@@ -33,6 +33,8 @@ model User {
   horseOwnerships   HorseOwner[]
   messages          Message[]
   messageReads      MessageRead[]
+  // Contracten waarin deze gebruiker de wederpartij (paardeigenaar) is.
+  counterpartyContracts Contract[] @relation("ContractCounterparty")
 }
 
 // ── Stal (pensionbedrijf) ────────────────────────────────────────────────────
@@ -69,6 +71,7 @@ model Stable {
   tasks          Task[]
   recurringTasks RecurringTask[]
   messages       Message[]
+  contracts      Contract[]
 }
 
 // Koppelt een gebruiker aan een stal met een rol (staf/eigenaar van de stal).
@@ -143,6 +146,7 @@ model Horse {
   messages        Message[]
   recurringTasks  RecurringTask[]
   feedingPlan     FeedingPlan?
+  contracts       Contract[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -359,6 +363,68 @@ enum ZorgType {
   ONTWORMING
   DIERENARTS
   HOEFSMIT
+}
+
+// ── Contracten (stalling + lease) ────────────────────────────────────────────
+// Fundament voor de contracten-module. STAL-01 levert het concept-stallingscontract
+// (full pension). Latere stories breiden uit met opties, prijs, looptijd, verzekering,
+// statusovergangen en de lease-familie. Houd dit datamodel daarom generiek.
+//
+// De wederpartij (counterpartyUserId) verwijst naar een User die via HorseOwner aan
+// het paard gekoppeld is — de paardeigenaar. Nullable tot er een eigenaar gekozen is.
+
+model Contract {
+  id      String @id @default(uuid()) @db.Uuid
+  horseId String @db.Uuid
+  horse   Horse  @relation(fields: [horseId], references: [id], onDelete: Cascade)
+
+  stableId String @db.Uuid
+  stable   Stable @relation(fields: [stableId], references: [id], onDelete: Cascade)
+
+  // Contract-familie + type. v1: family=STALLING, type="FULL_PENSION".
+  family ContractFamily
+  type   String
+
+  // Wederpartij (paardeigenaar). Nullable tot gekozen.
+  counterpartyUserId String? @db.Uuid
+  counterparty       User?   @relation("ContractCounterparty", fields: [counterpartyUserId], references: [id], onDelete: SetNull)
+
+  status         ContractStatus @default(CONCEPT)
+  currentVersion Int            @default(1)
+
+  // Ingangsdatum van de overeenkomst. Nullable tot ingevuld.
+  startDate DateTime?
+
+  // Ruimte voor config-velden die latere stories invullen (opties, prijs, looptijd,
+  // verzekering). Bewust als JSON zodat het schema niet bij elke story migreert.
+  config Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([horseId])
+  @@index([stableId])
+  @@index([counterpartyUserId])
+}
+
+enum ContractFamily {
+  STALLING
+  LEASE
+}
+
+enum ContractStatus {
+  CONCEPT
+  AANGEBODEN
+  GEACCEPTEERD
+  ACTIEF
+  OPGESCHORT
+  OPZEGGING_LOOPT
+  VERLENGD
+  BEEINDIGD
+  VERLOPEN
+  GEANNULEERD
+  AFGEWEZEN
+  VERVANGEN
 }
 
 // ── Autorisatie-logica (in app-laag, niet in schema) ─────────────────────────

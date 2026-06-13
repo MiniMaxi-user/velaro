@@ -17,6 +17,8 @@ import StalGegevensPanel from '@/features/paarden/StalGegevensPanel'
 import VoederschemaPanel from '@/features/paarden/VoederschemaPanel'
 import PaardDetailTabs from '@/features/paarden/PaardDetailTabs'
 import EigendomBadge from '@/features/paarden/EigendomBadge'
+import { getContractsForHorse } from '@/features/contracten/queries'
+import ContractenPanel from '@/features/contracten/ContractenPanel'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -40,7 +42,7 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, berichten, voederschema] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, berichten, voederschema, contracten] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
@@ -49,6 +51,7 @@ export default async function PaardDetailPage({ params }: Props) {
     getHoefsmitBezoeKen(id),
     getMessagesForHorse(id),
     getFeedingPlan(id),
+    getContractsForHorse(id),
   ])
 
   if (!canView) notFound()
@@ -198,6 +201,14 @@ export default async function PaardDetailPage({ params }: Props) {
           />
         )
 
+        const contractenPanel = (
+          <ContractenPanel
+            horseId={id}
+            contracts={contracten}
+            hasOwners={horse.owners.length > 0}
+          />
+        )
+
         // Stalleden (OWNER/STAFF): tab-layout met vaste contextkolom rechts.
         if (canEdit) {
           return (
@@ -228,6 +239,7 @@ export default async function PaardDetailPage({ params }: Props) {
                 }
                 voederschema={voederschemaPanel}
                 berichten={berichtenPanel}
+                contracten={contractenPanel}
               />
 
               {/* Rechterkolom (30%) — altijd zichtbaar */}

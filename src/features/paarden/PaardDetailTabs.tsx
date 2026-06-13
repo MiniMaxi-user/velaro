@@ -3,7 +3,7 @@
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import type { ReactNode } from 'react'
 
-export type PaardTabId = 'algemeen' | 'gezondheid' | 'eigenaren' | 'voederschema' | 'berichten'
+export type PaardTabId = 'algemeen' | 'gezondheid' | 'eigenaren' | 'voederschema' | 'berichten' | 'contracten'
 
 const TABS: { id: PaardTabId; label: string }[] = [
   { id: 'algemeen', label: 'Algemeen' },
@@ -11,6 +11,7 @@ const TABS: { id: PaardTabId; label: string }[] = [
   { id: 'eigenaren', label: 'Eigenaar & bereider' },
   { id: 'voederschema', label: 'Voederschema' },
   { id: 'berichten', label: 'Berichten' },
+  { id: 'contracten', label: 'Contracten' },
 ]
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
   eigenaren: ReactNode
   voederschema: ReactNode
   berichten: ReactNode
+  contracten: ReactNode
 }
 
 export default function PaardDetailTabs({
@@ -27,6 +29,7 @@ export default function PaardDetailTabs({
   eigenaren,
   voederschema,
   berichten,
+  contracten,
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -54,6 +57,7 @@ export default function PaardDetailTabs({
     eigenaren,
     voederschema,
     berichten,
+    contracten,
   }
 
   return (
