@@ -9,10 +9,16 @@ export default function ContractForm({
   horseId,
   action,
   owners,
+  defaultCounterpartyUserId,
+  defaultStartDate,
+  submitLabel = 'Concept aanmaken',
 }: {
   horseId: string
   action: (formData: FormData) => Promise<void>
   owners: OwnerOption[]
+  defaultCounterpartyUserId?: string
+  defaultStartDate?: string
+  submitLabel?: string
 }) {
   return (
     <form action={action} className="form-card">
@@ -36,7 +42,10 @@ export default function ContractForm({
             name="counterpartyUserId"
             className="input"
             required
-            defaultValue={owners.length === 1 ? owners[0].userId : ''}
+            defaultValue={
+              defaultCounterpartyUserId ??
+              (owners.length === 1 ? owners[0].userId : '')
+            }
           >
             <option value="" disabled>
               Kies een eigenaar
@@ -51,12 +60,18 @@ export default function ContractForm({
 
         <div className="form-group">
           <label htmlFor="startDate" className="form-label">Ingangsdatum</label>
-          <input id="startDate" name="startDate" type="date" className="input" />
+          <input
+            id="startDate"
+            name="startDate"
+            type="date"
+            className="input"
+            defaultValue={defaultStartDate}
+          />
         </div>
       </div>
 
       <div className="action-buttons">
-        <SubmitButton label="Concept aanmaken" />
+        <SubmitButton label={submitLabel} />
         <Link href={`/paarden/${horseId}?tab=contracten`} className="btn-ghost">Annuleren</Link>
       </div>
     </form>

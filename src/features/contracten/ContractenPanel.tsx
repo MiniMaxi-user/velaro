@@ -5,6 +5,7 @@ import {
   contractTypeLabel,
 } from './contractHelpers'
 import NieuwContractKnop from './NieuwContractKnop'
+import ContractActies from './ContractActies'
 import type { ContractStatus } from '@prisma/client'
 
 type ContractRow = {
@@ -42,6 +43,7 @@ export default function ContractenPanel({
                 <th>Wederpartij</th>
                 <th>Ingangsdatum</th>
                 <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -60,6 +62,11 @@ export default function ContractenPanel({
                     <span className={`badge ${CONTRACT_STATUS_BADGE[c.status]}`}>
                       {CONTRACT_STATUS_LABELS[c.status]}
                     </span>
+                  </td>
+                  <td>
+                    {c.status === 'CONCEPT' && (
+                      <ContractActies horseId={horseId} contractId={c.id} />
+                    )}
                   </td>
                 </tr>
               ))}
