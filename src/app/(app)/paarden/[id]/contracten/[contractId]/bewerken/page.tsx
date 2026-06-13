@@ -6,6 +6,7 @@ import { getStableRole } from '@/lib/auth/authorization'
 import { prisma } from '@/lib/prisma'
 import ContractForm from '@/features/contracten/ContractForm'
 import { updateStallingContract } from '@/features/contracten/actions'
+import { leesHuisvesting } from '@/features/contracten/huisvesting'
 
 interface Props {
   params: Promise<{ id: string; contractId: string }>
@@ -61,6 +62,13 @@ export default async function BewerkContractPage({ params }: Props) {
     ? new Date(contract.startDate).toISOString().slice(0, 10)
     : undefined
 
+  // Huisvesting-opties (STAL-03). Bij een leeg boxnummer voorvullen uit het
+  // paardprofiel — overschrijfbaar in het formulier.
+  const huisvesting = leesHuisvesting(contract.config)
+  if (!huisvesting.boxNumber && horse.boxNumber) {
+    huisvesting.boxNumber = horse.boxNumber
+  }
+
   const action = updateStallingContract.bind(null, id, contractId)
 
   return (
@@ -80,6 +88,7 @@ export default async function BewerkContractPage({ params }: Props) {
         owners={owners}
         defaultCounterpartyUserId={contract.counterpartyUserId ?? undefined}
         defaultStartDate={defaultStartDate}
+        huisvesting={huisvesting}
         submitLabel="Wijzigingen opslaan"
       />
     </main>

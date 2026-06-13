@@ -5,6 +5,27 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { getStableRole } from '@/lib/auth/authorization'
+import { BOXTYPE_LABELS, type Boxtype, type HuisvestingConfig } from './huisvesting'
+
+// Leest de huisvesting-opties (STAL-03) uit het formulier. Onbekende boxtypes
+// vallen terug op null; lege tekstvelden worden genormaliseerd naar null.
+function leesHuisvestingForm(formData: FormData): HuisvestingConfig {
+  const boxtypeRaw = (formData.get('boxtype') as string)?.trim()
+  const boxtype: Boxtype | null =
+    boxtypeRaw && boxtypeRaw in BOXTYPE_LABELS ? (boxtypeRaw as Boxtype) : null
+  const boxNumber = (formData.get('boxNumber') as string)?.trim() || null
+  const beddingtype = (formData.get('beddingtype') as string)?.trim() || null
+  const toezicht = (formData.get('toezicht') as string)?.trim() || null
+
+  return {
+    boxtype,
+    boxNumber,
+    uitmesten: formData.get('uitmesten') === 'true',
+    opstrooien: formData.get('opstrooien') === 'true',
+    beddingtype,
+    toezicht,
+  }
+}
 
 // Autorisatie: alleen OWNER/STAFF van de stal van het paard mag contracten van dat
 // paard aanmaken. Server-side afgedwongen — paardeigenaren worden geweigerd.
@@ -84,7 +105,7 @@ export async function updateStallingContract(
   contractId: string,
   formData: FormData,
 ) {
-  await getEditableConceptContract(horseId, contractId)
+  const { contract } = await getEditableConceptContract(horseId, contractId)
 
   const counterpartyUserId = (formData.get('counterpartyUserId') as string)?.trim()
   const startDateStr = (formData.get('startDate') as string)?.trim()
@@ -101,11 +122,21 @@ export async function updateStallingContract(
     throw new Error('De gekozen wederpartij is geen eigenaar van dit paard.')
   }
 
+  // Huisvesting-opties (STAL-03) als JSON-blok onder config.huisvesting bewaren.
+  // Bestaande config-sleutels van andere stories blijven behouden.
+  const huisvesting = leesHuisvestingForm(formData)
+  const bestaandeConfig =
+    contract.config && typeof contract.config === 'object' && !Array.isArray(contract.config)
+      ? (contract.config as Record<string, unknown>)
+      : {}
+  const nieuweConfig = { ...bestaandeConfig, huisvesting }
+
   await prisma.contract.update({
     where: { id: contractId },
     data: {
       counterpartyUserId,
       startDate: startDateStr ? new Date(startDateStr) : null,
+      config: nieuweConfig,
     },
   })
 
