@@ -1,6 +1,6 @@
 ---
 name: velaro-githubconnector
-description: Beheert het Velaro GitHub-projectbord (items ophalen, aanmaken, status verzetten) via de gh CLI. Eén bron van waarheid voor de bord-ID's. Gebruik dit bij elke interactie met het projectbord.
+description: Beheert het Velaro GitHub-projectbord en de gekoppelde issues (items ophalen, aanmaken, status/kolom verzetten, issue-body bewerken, labels beheren) via de gh CLI. Eén bron van waarheid voor de bord-ID's. Gebruik dit bij elke interactie met het projectbord.
 ---
 
 # Velaro GitHub-projectbord connector
@@ -49,10 +49,29 @@ gh project item-list 2 --owner MiniMaxi-user --format json -L 100
 ```
 
 Elk item heeft een `id` (begint met `PVTI_`), een `status` (de Status-veldwaarde,
-bijv. `"Ready"`) en een `content`-object (`title`, en bij issues `number`).
+bijv. `"Ready"`) en een `content`-object. Bij een **echt issue** bevat `content`:
+`type: "Issue"`, `number`, `title`, `body`, `url` en `repository`. Bij een
+**draft-item** is er geen `number`/`url` en (belangrijk) géén label.
+
+Een item dat van een issue komt heeft daarnaast een top-level `labels`-lijst met
+labelnamen — maar **alleen als er labels zijn** (anders ontbreekt het veld). Lees het
+dus defensief: `i.get('labels') or []`.
 
 > **Let op:** `item-list` pagineert standaard op 30 items. Het bord heeft er meer,
 > dus geef altijd `-L 100` (of hoger) mee — anders mis je mogelijk items.
+
+> **Labels zitten op het issue, niet op het bord-item.** Alleen items van type
+> `Issue` kunnen labels hebben; draft-items niet. Label- en body-bewerkingen lopen
+> daarom via `gh issue …` op `content.number`, niet via `gh project …`.
+
+### Filteren op kolom + label (bijv. Backlog + label `refine`)
+
+```
+gh project item-list 2 --owner MiniMaxi-user --format json -L 100 | python -c "import json,sys; d=json.load(sys.stdin); [print(i['id'], '| #'+str(i['content'].get('number')), '|', i['content'].get('title')) for i in d['items'] if i.get('status')=='Backlog' and 'refine' in (i.get('labels') or [])]"
+```
+
+Onthoud per item het bord-`id` (`PVTI_`, voor statuswijziging) én `content.number`
+(voor body-/labelbewerking).
 
 ### Filteren op status (bijv. de oudste 'Ready')
 
@@ -88,6 +107,33 @@ gh project item-edit \
 
 Vervang `<OPTIE_ID>` door de optie-ID uit de tabel hierboven
 (Ready `61e4505c`, In progress `47fc9ee4`, In review `df73e18b`).
+
+### Een issue lezen (titel, body, comments)
+
+```
+gh issue view <NUMMER> --repo MiniMaxi-user/velaro --json number,title,body,labels,comments
+```
+
+De `body` uit `item-list` is de huidige beschrijving; `comments` zit alleen in
+`gh issue view` en is vaak nodig voor de context bij refinen.
+
+### Een issue-body / titel bijwerken
+
+`gh issue edit` ondersteunt wél `--body-file` (anders dan `item-create`). Schrijf de
+verbeterde markdown naar een tijdelijk bestand en update:
+
+```
+gh issue edit <NUMMER> --repo MiniMaxi-user/velaro \
+  --title "<nieuwe titel>" \
+  --body-file <pad-naar-md-bestand>
+```
+
+### Labels beheren
+
+```
+gh issue edit <NUMMER> --repo MiniMaxi-user/velaro --add-label "<label>"
+gh issue edit <NUMMER> --repo MiniMaxi-user/velaro --remove-label "<label>"
+```
 
 ## Onderhoud
 
