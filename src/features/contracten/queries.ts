@@ -8,6 +8,12 @@ import {
   type NalevingStatus,
   type VaccinatieSoort,
 } from './gezondheidsplicht'
+import {
+  CONTRACT_BIJLAGEN_BUCKET,
+  getBijlagenVoorContract,
+} from './bijlagenStorage'
+import { createAdminClient } from '@/lib/supabase/admin'
+import type { SamenvattingBijlage } from './ContractSamenvatting'
 
 // Haalt de contracten van een paard op, nieuwste eerst, inclusief de wederpartij.
 export async function getContractsForHorse(horseId: string) {
@@ -73,6 +79,33 @@ export async function getAangebodenContractVoorEigenaar(
     },
     orderBy: { createdAt: 'desc' },
   })
+}
+
+// Haalt de gekoppelde bijlagen van een contract op met per bijlage een tijdelijke
+// (signed) URL voor inzage (STAL-16). Bedoeld voor server-componenten die de bijlagen
+// alleen-lezen tonen (eigenaar-samenvatting, contract-weergave). De *autorisatie* (mag
+// deze gebruiker dit contract zien) wordt door de aanroeper afgedwongen; deze helper
+// genereert enkel de signed URL's. Geen bijlagen → lege lijst.
+export async function getBijlagenMetUrls(
+  contractId: string,
+): Promise<SamenvattingBijlage[]> {
+  const bijlagen = await getBijlagenVoorContract(contractId)
+  if (bijlagen.length === 0) return []
+
+  const supabase = createAdminClient()
+  const resultaat: SamenvattingBijlage[] = []
+  for (const bijlage of bijlagen) {
+    const { data } = await supabase.storage
+      .from(CONTRACT_BIJLAGEN_BUCKET)
+      .createSignedUrl(bijlage.storagePath, 600)
+    resultaat.push({
+      id: bijlage.id,
+      categorie: bijlage.categorie,
+      bestandsnaam: bijlage.bestandsnaam,
+      url: data?.signedUrl ?? null,
+    })
+  }
+  return resultaat
 }
 
 // Eén regel in de nalevings-weergave: een actief plicht-onderdeel met de

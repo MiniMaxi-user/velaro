@@ -34,6 +34,13 @@ import {
   type GezondheidsplichtConfig,
 } from './gezondheidsplicht'
 import type { BerijderConfig } from './berijder'
+import {
+  FREQUENTIE_OPTIES,
+  FREQUENTIE_LABELS,
+  type BijlagenConfig,
+  type ExtraDienstenConfig,
+  type Frequentie,
+} from './bijlagenDiensten'
 
 type OwnerOption = { userId: string; label: string }
 
@@ -57,6 +64,8 @@ export default function ContractForm({
   verzekeringAansprakelijkheid,
   gezondheidsplicht,
   berijder,
+  bijlagenConfig,
+  extraDiensten,
   submitLabel = 'Concept aanmaken',
 }: {
   horseId: string
@@ -79,6 +88,10 @@ export default function ContractForm({
   gezondheidsplicht?: GezondheidsplichtConfig
   // Wanneer meegegeven, toont het formulier de sectie "Berijder" (optioneel blok).
   berijder?: BerijderConfig
+  // Wanneer meegegeven, toont het formulier de sectie "Bijlagen & extra diensten"
+  // (STAL-16): de instelling "stalreglement verplicht" en de prijslijst.
+  bijlagenConfig?: BijlagenConfig
+  extraDiensten?: ExtraDienstenConfig
   submitLabel?: string
 }) {
   const ruwvoerRef = useRef<HTMLInputElement>(null)
@@ -101,6 +114,42 @@ export default function ContractForm({
     eenheid: opzegEenheid,
     schriftelijk: true,
   })
+
+  // Client-state voor de prijslijst (extra diensten, STAL-16): een dynamische lijst
+  // van posten die toegevoegd/verwijderd kan worden. De velden worden als parallelle
+  // form-velden (extraDienstOmschrijving[]/Bedrag[]/Frequentie[]) ingestuurd; harde
+  // validatie gebeurt server-side. Elke rij krijgt een client-side key om rerenders
+  // stabiel te houden.
+  type PrijslijstRij = {
+    key: string
+    omschrijving: string
+    bedrag: string
+    frequentie: Frequentie
+  }
+  const [prijslijst, setPrijslijst] = useState<PrijslijstRij[]>(
+    (extraDiensten?.posten ?? []).map((p, i) => ({
+      key: `bestaand-${i}`,
+      omschrijving: p.omschrijving,
+      bedrag: String(p.bedrag),
+      frequentie: p.frequentie,
+    })),
+  )
+  const voegPostToe = () =>
+    setPrijslijst((rijen) => [
+      ...rijen,
+      {
+        key: `nieuw-${Date.now()}-${rijen.length}`,
+        omschrijving: '',
+        bedrag: '',
+        frequentie: 'PER_MAAND',
+      },
+    ])
+  const verwijderPost = (key: string) =>
+    setPrijslijst((rijen) => rijen.filter((r) => r.key !== key))
+  const wijzigPost = (key: string, veld: keyof PrijslijstRij, waarde: string) =>
+    setPrijslijst((rijen) =>
+      rijen.map((r) => (r.key === key ? { ...r, [veld]: waarde } : r)),
+    )
 
   // Vult de voervelden vanuit het voederschema (roughage -> ruwvoer, concentrate ->
   // krachtvoer). De velden blijven daarna bewerkbaar. Zonder voederschema is de knop
@@ -1036,6 +1085,116 @@ export default function ContractForm({
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {(bijlagenConfig || extraDiensten) && (
+        <div className="form-section" style={{ marginTop: 'var(--velaro-space-6)' }}>
+          <div className="form-section-title">Bijlagen &amp; extra diensten</div>
+
+          {bijlagenConfig && (
+            <div className="form-group">
+              <label className="profiel-checkbox-label">
+                <input
+                  className="profiel-checkbox"
+                  type="checkbox"
+                  name="stalreglementVerplicht"
+                  value="true"
+                  defaultChecked={bijlagenConfig.stalreglementVerplicht}
+                />
+                <span>Stalreglement verplicht</span>
+              </label>
+              <span className="form-hint">
+                Staat dit aan, dan kan het contract pas worden aangeboden wanneer er een
+                stalreglement-bijlage is gekoppeld. Bijlagen koppel je hieronder, los van
+                dit formulier.
+              </span>
+            </div>
+          )}
+
+          {extraDiensten && (
+            <div style={{ marginTop: 'var(--velaro-space-4)' }}>
+              <div className="form-label">Extra diensten / prijslijst</div>
+              <p className="form-hint" style={{ marginBottom: 'var(--velaro-space-3)' }}>
+                Posten die los van de pensionprijs gefactureerd kunnen worden. Vul per
+                post een omschrijving, een bedrag en een frequentie in.
+              </p>
+
+              {prijslijst.length === 0 && (
+                <p
+                  className="form-hint"
+                  style={{ marginBottom: 'var(--velaro-space-3)' }}
+                >
+                  Nog geen posten toegevoegd.
+                </p>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--velaro-space-3)' }}>
+                {prijslijst.map((rij) => (
+                  <div className="form-grid" key={rij.key}>
+                    <div className="form-group">
+                      <label className="form-label">Omschrijving</label>
+                      <input
+                        type="text"
+                        name="extraDienstOmschrijving"
+                        className="input"
+                        placeholder="bijv. paard opvangen bij weidegang"
+                        value={rij.omschrijving}
+                        onChange={(e) =>
+                          wijzigPost(rij.key, 'omschrijving', e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Bedrag (€)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        name="extraDienstBedrag"
+                        className="input"
+                        placeholder="bijv. 25"
+                        value={rij.bedrag}
+                        onChange={(e) => wijzigPost(rij.key, 'bedrag', e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Frequentie</label>
+                      <select
+                        name="extraDienstFrequentie"
+                        className="input"
+                        value={rij.frequentie}
+                        onChange={(e) =>
+                          wijzigPost(rij.key, 'frequentie', e.target.value)
+                        }
+                      >
+                        {FREQUENTIE_OPTIES.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {FREQUENTIE_LABELS[opt]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ alignSelf: 'end' }}>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => verwijderPost(rij.key)}
+                      >
+                        Verwijderen
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 'var(--velaro-space-3)' }}>
+                <button type="button" className="btn-ghost" onClick={voegPostToe}>
+                  Post toevoegen
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

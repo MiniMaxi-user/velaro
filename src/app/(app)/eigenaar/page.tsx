@@ -7,6 +7,7 @@ import BerichtItem from '@/features/berichten/BerichtItem'
 import { getZorgActiesVoorPaard } from '@/features/gezondheid/queries'
 import {
   getAangebodenContractVoorEigenaar,
+  getBijlagenMetUrls,
   getContractsForEigenaar,
 } from '@/features/contracten/queries'
 import {
@@ -62,6 +63,15 @@ export default async function EigenaarPage() {
   const mijnContracten = verlengd > 0 || tijdgebonden > 0
     ? await getContractsForEigenaar(user.id)
     : eigenaarContractenVoorVerlenging
+
+  // Bijlagen (STAL-16) van een eventueel aangeboden contract per paard, met signed
+  // URL's voor inzage. Alleen voor het aangeboden contract — concepten ziet de
+  // eigenaar niet. Geen aanbod → lege lijst.
+  const bijlagenPerPaard = await Promise.all(
+    aangebodenContractPerPaard.map((c) =>
+      c ? getBijlagenMetUrls(c.id) : Promise.resolve([]),
+    ),
+  )
 
   return (
     <>
@@ -227,7 +237,10 @@ export default async function EigenaarPage() {
                         De stal heeft je een stallingscontract aangeboden. Lees het door
                         en accepteer of wijs het af.
                       </p>
-                      <ContractSamenvatting config={aangebodenContract.config} />
+                      <ContractSamenvatting
+                        config={aangebodenContract.config}
+                        bijlagen={bijlagenPerPaard[index]}
+                      />
                       <div style={{ marginTop: 16 }}>
                         <EigenaarContractActies contractId={aangebodenContract.id} />
                       </div>

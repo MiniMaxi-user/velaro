@@ -35,6 +35,20 @@ import {
 } from './gezondheidsplicht'
 import type { BerijderConfig } from './berijder'
 import {
+  BIJLAGE_CATEGORIE_OPTIES,
+  isFrequentie,
+  type BijlagenConfig,
+  type ExtraDienst,
+  type ExtraDienstenConfig,
+  type Frequentie,
+} from './bijlagenDiensten'
+import {
+  getSignedUrlVoorBijlage,
+  heeftStalreglementBijlage,
+  slaBijlageOp,
+  verwijderBijlage,
+} from './bijlagenStorage'
+import {
   assertOvergangToegestaan,
   leesStatusHistorie,
   leesVersieGroepId,
@@ -333,6 +347,51 @@ function leesBerijderForm(formData: FormData): BerijderConfig {
   return { naam, geboortedatum, relatieTotEigenaar }
 }
 
+// Leest de bijlagen-instellingen (STAL-16) uit het formulier. Voorlopig één
+// instelling: of een stalreglement-bijlage verplicht is voordat aangeboden mag worden.
+function leesBijlagenConfigForm(formData: FormData): BijlagenConfig {
+  return {
+    stalreglementVerplicht: formData.get('stalreglementVerplicht') === 'true',
+  }
+}
+
+// Leest de extra diensten / prijslijst (STAL-16) uit het formulier en valideert
+// server-side. De posten komen als parallelle velden binnen (extraDienstOmschrijving[],
+// extraDienstBedrag[], extraDienstFrequentie[]). Een post met een omschrijving óf een
+// bedrag moet beide gevuld hebben; volledig lege posten worden genegeerd. Gooit bij een
+// onvolledige post een fout (opslaan wordt geweigerd).
+function leesExtraDienstenForm(formData: FormData): ExtraDienstenConfig {
+  const omschrijvingen = formData.getAll('extraDienstOmschrijving').map((v) => String(v))
+  const bedragen = formData.getAll('extraDienstBedrag').map((v) => String(v))
+  const frequenties = formData.getAll('extraDienstFrequentie').map((v) => String(v))
+
+  const aantal = Math.max(omschrijvingen.length, bedragen.length, frequenties.length)
+  const posten: ExtraDienst[] = []
+
+  for (let i = 0; i < aantal; i++) {
+    const omschrijving = (omschrijvingen[i] ?? '').trim()
+    const bedragRaw = (bedragen[i] ?? '').trim()
+    const frequentieRaw = (frequenties[i] ?? '').trim()
+
+    // Volledig lege regel: overslaan (toegevoegde maar niet ingevulde rij).
+    if (!omschrijving && !bedragRaw) continue
+
+    if (!omschrijving) {
+      throw new Error('Vul een omschrijving in voor elke post in de prijslijst.')
+    }
+    const bedrag = leesNietNegatiefGetal(bedragRaw, 'Het bedrag van een prijslijst-post')
+    if (bedrag === null) {
+      throw new Error('Vul een bedrag in voor elke post in de prijslijst.')
+    }
+    const frequentie: Frequentie = isFrequentie(frequentieRaw)
+      ? frequentieRaw
+      : 'PER_MAAND'
+    posten.push({ omschrijving, bedrag, frequentie })
+  }
+
+  return { posten }
+}
+
 // Autorisatie: alleen OWNER/STAFF van de stal van het paard mag contracten van dat
 // paard aanmaken. Server-side afgedwongen — paardeigenaren worden geweigerd.
 async function getAuthorizedStaff(horseId: string) {
@@ -442,6 +501,11 @@ export async function updateStallingContract(
   const gezondheidsplicht = leesGezondheidsplichtForm(formData)
   // Berijder (STAL-10) — optioneel optieblok, blokkeert het aanbieden niet.
   const berijder = leesBerijderForm(formData)
+  // Bijlagen-instelling + extra diensten/prijslijst (STAL-16). De bijlage-bestanden
+  // zelf lopen via aparte upload-/verwijder-acties (ContractBijlage); hier bewaren we
+  // enkel de "stalreglement verplicht"-instelling en de prijslijst als config-data.
+  const bijlagen = leesBijlagenConfigForm(formData)
+  const extraDiensten = leesExtraDienstenForm(formData)
   const bestaandeConfig =
     contract.config && typeof contract.config === 'object' && !Array.isArray(contract.config)
       ? (contract.config as Record<string, unknown>)
@@ -456,6 +520,8 @@ export async function updateStallingContract(
     verzekeringAansprakelijkheid,
     gezondheidsplicht,
     berijder,
+    bijlagen,
+    extraDiensten,
   }
 
   await prisma.contract.update({
@@ -505,7 +571,10 @@ export async function offerContract(horseId: string, contractId: string) {
   }
 
   // Verplicht-veld-validatie: alle verplichte optieblokken moeten volledig zijn.
-  const ontbreekt = ontbrekendeAanbiedVelden(contract.config)
+  // Het stalreglement is een DB-feit (gekoppelde bijlage), dus apart ophalen en
+  // doorgeven aan de validatie (telt alleen mee bij stalreglementVerplicht).
+  const heeftStalreglement = await heeftStalreglementBijlage(contractId)
+  const ontbreekt = ontbrekendeAanbiedVelden(contract.config, heeftStalreglement)
   if (ontbreekt.length > 0) {
     throw new Error(
       `Het contract is nog niet compleet en kan niet worden aangeboden. Ontbreekt nog — ${ontbrekendeVeldenSamenvatting(
@@ -658,6 +727,8 @@ const CONFIG_OPTIE_SLEUTELS = [
   'verzekeringAansprakelijkheid',
   'gezondheidsplicht',
   'berijder',
+  'bijlagen',
+  'extraDiensten',
 ] as const
 
 // ── Versionering: nieuwe versie maken vervangt de vorige (STAL-11, #84) ───────
@@ -832,11 +903,19 @@ export async function previewContractPdf(
     throw new Error('Contract niet gevonden')
   }
 
+  // Gekoppelde bijlagen (STAL-16) — alleen naam + categorie voor het PDF-overzicht.
+  const bijlagen = await prisma.contractBijlage.findMany({
+    where: { contractId },
+    orderBy: { createdAt: 'asc' },
+    select: { categorie: true, bestandsnaam: true },
+  })
+
   const buffer = await renderContractPdfBuffer(
     {
       currentVersion: contract.currentVersion,
       startDate: contract.startDate,
       config: contract.config,
+      bijlagen,
     },
     context,
   )
@@ -1557,4 +1636,117 @@ export async function verwerkTijdgebondenOvergangen(
     }
   }
   return aantal
+}
+
+// ── Bijlagen koppelen/beheren (STAL-16) ───────────────────────────────────────
+// Door de stal aangeleverde bijlagen (stalreglement, voerschema, prijslijst, kopie
+// verzekeringspolis) worden in Supabase Storage bewaard en als ContractBijlage aan
+// het contract gekoppeld. Server-side afgedwongen: alleen OWNER/STAFF van de stal,
+// en alleen bij status CONCEPT (dezelfde poort als bewerken). De bestanden zijn
+// individueel toe te voegen/verwijderen, los van het opslaan van het bewerkscherm.
+
+// Toegestane bestandstypen + maximale grootte voor een bijlage.
+const BIJLAGE_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+const BIJLAGE_TOEGESTANE_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+])
+
+// Koppelt (upload) een bijlage aan een concept-contract in de opgegeven categorie.
+export async function uploadContractBijlage(
+  horseId: string,
+  contractId: string,
+  formData: FormData,
+) {
+  // Autorisatie + status-poort: alleen OWNER/STAFF, alleen bij CONCEPT.
+  await getEditableConceptContract(horseId, contractId)
+
+  const categorie = (formData.get('categorie') as string)?.trim()
+  if (!categorie || !BIJLAGE_CATEGORIE_OPTIES.includes(categorie as never)) {
+    throw new Error('Kies een geldige categorie voor de bijlage.')
+  }
+
+  const file = formData.get('bestand')
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error('Kies een bestand om te koppelen.')
+  }
+  if (file.size > BIJLAGE_MAX_BYTES) {
+    throw new Error('Het bestand is te groot (maximaal 10 MB).')
+  }
+  if (file.type && !BIJLAGE_TOEGESTANE_TYPES.has(file.type)) {
+    throw new Error('Alleen PDF- of afbeeldingsbestanden zijn toegestaan.')
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  await slaBijlageOp({
+    contractId,
+    categorie,
+    bestandsnaam: file.name || 'bijlage',
+    buffer,
+    contentType: file.type || 'application/octet-stream',
+  })
+
+  revalidatePath(`/paarden/${horseId}/contracten/${contractId}/bewerken`)
+  revalidatePath(`/paarden/${horseId}`)
+}
+
+// Verwijdert een gekoppelde bijlage van een concept-contract.
+export async function verwijderContractBijlage(
+  horseId: string,
+  contractId: string,
+  bijlageId: string,
+) {
+  await getEditableConceptContract(horseId, contractId)
+
+  // De bijlage moet bij dit contract horen (geen cross-contract-verwijdering).
+  const bijlage = await prisma.contractBijlage.findUnique({ where: { id: bijlageId } })
+  if (!bijlage || bijlage.contractId !== contractId) {
+    throw new Error('Bijlage niet gevonden')
+  }
+
+  await verwijderBijlage(bijlageId)
+
+  revalidatePath(`/paarden/${horseId}/contracten/${contractId}/bewerken`)
+  revalidatePath(`/paarden/${horseId}`)
+}
+
+// Signed URL voor OWNER/STAFF om een gekoppelde bijlage te openen. Server-side
+// afgedwongen: alleen OWNER/STAFF van de stal van het paard, en de bijlage moet bij
+// het contract horen.
+export async function getBijlageUrlVoorStaf(
+  horseId: string,
+  contractId: string,
+  bijlageId: string,
+): Promise<string | null> {
+  await getAuthorizedStaff(horseId)
+
+  const bijlage = await prisma.contractBijlage.findUnique({ where: { id: bijlageId } })
+  if (!bijlage || bijlage.contractId !== contractId) {
+    throw new Error('Bijlage niet gevonden')
+  }
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } })
+  if (!contract || contract.horseId !== horseId) {
+    throw new Error('Contract niet gevonden')
+  }
+
+  return getSignedUrlVoorBijlage(bijlageId)
+}
+
+// Signed URL voor de paardeigenaar om een gekoppelde bijlage in te zien (sluit aan
+// op STAL-09: dezelfde leesrechten als de eigenaar-weergave). Server-side afgedwongen:
+// alleen de gekoppelde wederpartij, en de bijlage moet bij het contract horen.
+export async function getBijlageUrlVoorEigenaar(
+  contractId: string,
+  bijlageId: string,
+): Promise<string | null> {
+  await getOwnerDecisionContract(contractId)
+
+  const bijlage = await prisma.contractBijlage.findUnique({ where: { id: bijlageId } })
+  if (!bijlage || bijlage.contractId !== contractId) {
+    throw new Error('Bijlage niet gevonden')
+  }
+
+  return getSignedUrlVoorBijlage(bijlageId)
 }

@@ -16,6 +16,12 @@ import {
 import { leesVerzekeringAansprakelijkheid } from './verzekeringAansprakelijkheid'
 import { leesGezondheidsplicht, vaccinatieSoortLabel } from './gezondheidsplicht'
 import { heeftBerijder, leesBerijder } from './berijder'
+import {
+  bijlageCategorieLabel,
+  formatExtraDienstBedrag,
+  frequentieLabel,
+  leesExtraDiensten,
+} from './bijlagenDiensten'
 
 // ── PDF-databouw (STAL-12) ───────────────────────────────────────────────────
 // Bouwt uit een contract + config het stel documentsecties op dat de PDF rendert.
@@ -60,6 +66,9 @@ export type PdfContractInput = {
   currentVersion: number
   startDate: Date | null
   config: Prisma.JsonValue | null
+  // Door de stal aangeleverde bijlagen (STAL-16). Hier alleen de namen + categorie
+  // (geen bestanden): de PDF toont enkel een overzicht van wat er gekoppeld is.
+  bijlagen?: { categorie: string; bestandsnaam: string }[]
 }
 
 export type PdfContextInput = {
@@ -297,6 +306,35 @@ export function bouwContractPdfData(
       regels.push({ label: 'Relatie tot eigenaar', waarde: berijder.relatieTotEigenaar })
     }
     secties.push({ titel: 'Berijder', regels })
+  }
+
+  // ── Extra diensten / prijslijst (STAL-16) ── (alleen bij minstens één post)
+  // Naast de reguliere pensionprijs vastgelegde posten die los gefactureerd kunnen
+  // worden. Elke post als regel: "omschrijving — bedrag (frequentie)".
+  const extraDiensten = leesExtraDiensten(contract.config)
+  if (extraDiensten.posten.length > 0) {
+    secties.push({
+      titel: 'Extra diensten (prijslijst)',
+      regels: extraDiensten.posten.map((post) => ({
+        label: post.omschrijving,
+        waarde: `${formatExtraDienstBedrag(post.bedrag)} (${frequentieLabel(
+          post.frequentie,
+        )})`,
+      })),
+    })
+  }
+
+  // ── Bijlagen (STAL-16) ── (alleen wanneer er bijlagen gekoppeld zijn)
+  // Een overzicht van de gekoppelde documenten (geen bestandsinhoud in de PDF).
+  const bijlagen = contract.bijlagen ?? []
+  if (bijlagen.length > 0) {
+    secties.push({
+      titel: 'Bijlagen',
+      regels: bijlagen.map((b) => ({
+        label: bijlageCategorieLabel(b.categorie),
+        waarde: b.bestandsnaam,
+      })),
+    })
   }
 
   return {

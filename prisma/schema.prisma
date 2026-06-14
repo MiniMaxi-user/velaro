@@ -395,9 +395,41 @@ model Contract {
   // en hier als ContractDocument gekoppeld.
   documents ContractDocument[]
 
+  // Door de stal aangeleverde bijlagen (STAL-16): stalreglement, voerschema,
+  // prijslijst, kopie verzekeringspolis. Andere documenten dan de gegenereerde
+  // contract-PDF; daarom een eigen koppelmodel (ContractBijlage).
+  bijlagen ContractBijlage[]
+
   @@index([horseId])
   @@index([stableId])
   @@index([counterpartyUserId])
+}
+
+// ── Contract-bijlagen (STAL-16) ──────────────────────────────────────────────
+// Door de stal geüploade bijlagen die documentair bij een contract horen
+// (stalreglement, voerschema, prijslijst, kopie verzekeringspolis). Het bestand
+// staat in Supabase Storage (bucket voor contract-bijlagen); hier bewaren we het
+// storage-pad, de oorspronkelijke bestandsnaam en de categorie. Per categorie zijn
+// meerdere of geen bijlagen mogelijk. Inzage voor de paardeigenaar loopt — net als
+// de contract-PDF — via een signed URL met dezelfde leesrechten als de eigenaar-
+// weergave van het paard.
+model ContractBijlage {
+  id         String   @id @default(uuid()) @db.Uuid
+  contractId String   @db.Uuid
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  // Categorie van de bijlage (STALREGLEMENT, VOERSCHEMA, PRIJSLIJST, VERZEKERINGSPOLIS).
+  categorie String
+
+  // Oorspronkelijke bestandsnaam (voor weergave/download).
+  bestandsnaam String
+
+  // Pad/key van het bestand binnen de Supabase Storage-bucket.
+  storagePath String
+
+  createdAt DateTime @default(now())
+
+  @@index([contractId])
 }
 
 // ── Contract-PDF (STAL-12) ───────────────────────────────────────────────────

@@ -87,11 +87,18 @@ export async function genereerEnSlaContractPdfOp(contractId: string): Promise<vo
   if (!contract) throw new Error('Contract niet gevonden')
 
   const context = await bouwContextVoorContract(contractId)
+  // Gekoppelde bijlagen (STAL-16) — alleen naam + categorie voor het PDF-overzicht.
+  const bijlagen = await prisma.contractBijlage.findMany({
+    where: { contractId },
+    orderBy: { createdAt: 'asc' },
+    select: { categorie: true, bestandsnaam: true },
+  })
   const buffer = await renderContractPdfBuffer(
     {
       currentVersion: contract.currentVersion,
       startDate: contract.startDate,
       config: contract.config,
+      bijlagen,
     },
     context,
   )

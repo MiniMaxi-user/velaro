@@ -12,6 +12,12 @@ import { leesPrijsLooptijd } from '@/features/contracten/prijsLooptijd'
 import { leesVerzekeringAansprakelijkheid } from '@/features/contracten/verzekeringAansprakelijkheid'
 import { leesGezondheidsplicht } from '@/features/contracten/gezondheidsplicht'
 import { leesBerijder } from '@/features/contracten/berijder'
+import {
+  leesBijlagenConfig,
+  leesExtraDiensten,
+} from '@/features/contracten/bijlagenDiensten'
+import { getBijlagenVoorContract } from '@/features/contracten/bijlagenStorage'
+import BijlagenBeheer from '@/features/contracten/BijlagenBeheer'
 import { getFeedingPlan } from '@/features/paarden/queries'
 
 interface Props {
@@ -90,6 +96,13 @@ export default async function BewerkContractPage({ params }: Props) {
   // Berijder (STAL-10) uit de contract-config — optioneel optieblok.
   const berijder = leesBerijder(contract.config)
 
+  // Bijlagen-instelling + extra diensten/prijslijst (STAL-16) uit de contract-config.
+  const bijlagenConfig = leesBijlagenConfig(contract.config)
+  const extraDiensten = leesExtraDiensten(contract.config)
+
+  // Reeds gekoppelde bijlagen (DB-records) voor het beheer-paneel onder het formulier.
+  const bijlagen = await getBijlagenVoorContract(contractId)
+
   // Voorvulwaarden uit het voederschema van het paard; null wanneer er geen
   // FeedingPlan is, zodat de overnemen-knop in het formulier wordt uitgeschakeld.
   const feedingPlan = await getFeedingPlan(id)
@@ -124,7 +137,19 @@ export default async function BewerkContractPage({ params }: Props) {
         verzekeringAansprakelijkheid={verzekeringAansprakelijkheid}
         gezondheidsplicht={gezondheidsplicht}
         berijder={berijder}
+        bijlagenConfig={bijlagenConfig}
+        extraDiensten={extraDiensten}
         submitLabel="Wijzigingen opslaan"
+      />
+
+      <BijlagenBeheer
+        horseId={id}
+        contractId={contractId}
+        bijlagen={bijlagen.map((b) => ({
+          id: b.id,
+          categorie: b.categorie,
+          bestandsnaam: b.bestandsnaam,
+        }))}
       />
     </main>
   )

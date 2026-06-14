@@ -7,6 +7,7 @@ import {
   ontbrekendeVerplichteVelden,
   VERPLICHTE_VELDEN,
 } from './verzekeringAansprakelijkheid'
+import { leesBijlagenConfig } from './bijlagenDiensten'
 
 // ── Verplicht-veld-validatie vóór aanbieden (STAL-08, #81) ───────────────────
 // Aggregeert de compleetheids-helpers van alle verplichte optieblokken tot één
@@ -23,8 +24,13 @@ export type OntbrekendBlok = {
 // Leest het config-JSON van een contract en bepaalt per verplicht blok welke
 // velden nog ontbreken. Een leeg resultaat betekent dat het contract aangeboden
 // mag worden.
+// `heeftStalreglement` geeft aan of er een stalreglement-bijlage aan het contract
+// gekoppeld is (een DB-feit, geen config-data). De aanroeper haalt dit op en geeft
+// het door; standaard true zodat callers die het (nog) niet weten niet onbedoeld
+// blokkeren. Wordt alleen gebruikt wanneer config.bijlagen.stalreglementVerplicht aan staat.
 export function ontbrekendeAanbiedVelden(
   config: Prisma.JsonValue | null | undefined,
+  heeftStalreglement: boolean = true,
 ): OntbrekendBlok[] {
   const resultaat: OntbrekendBlok[] = []
 
@@ -54,14 +60,22 @@ export function ontbrekendeAanbiedVelden(
     resultaat.push({ blok: 'Verzekering & aansprakelijkheid', velden: verzekering })
   }
 
+  // Bijlagen (STAL-16): wanneer "stalreglement verplicht" aanstaat en er geen
+  // stalreglement-bijlage gekoppeld is, telt dit als ontbrekend verplicht onderdeel.
+  const bijlagen = leesBijlagenConfig(config)
+  if (bijlagen.stalreglementVerplicht && !heeftStalreglement) {
+    resultaat.push({ blok: 'Bijlagen', velden: ['Stalreglement (verplicht)'] })
+  }
+
   return resultaat
 }
 
 // `true` wanneer alle verplichte velden ingevuld zijn (contract mag aangeboden).
 export function magAangebodenWorden(
   config: Prisma.JsonValue | null | undefined,
+  heeftStalreglement: boolean = true,
 ): boolean {
-  return ontbrekendeAanbiedVelden(config).length === 0
+  return ontbrekendeAanbiedVelden(config, heeftStalreglement).length === 0
 }
 
 // Vlakt het overzicht uit tot één begrijpelijke foutregel voor de server-poort.

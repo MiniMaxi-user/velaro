@@ -19,7 +19,21 @@ import {
   vaccinatieSoortLabel,
 } from './gezondheidsplicht'
 import { heeftBerijder, leesBerijder } from './berijder'
+import {
+  bijlageCategorieLabel,
+  formatExtraDienstBedrag,
+  frequentieLabel,
+  leesExtraDiensten,
+} from './bijlagenDiensten'
 import { formatDatum, isMinderjarig } from '@/features/paarden/paardHelpers'
+
+// Eén gekoppelde bijlage met (optioneel) een signed URL om in te zien/downloaden.
+export type SamenvattingBijlage = {
+  id: string
+  categorie: string
+  bestandsnaam: string
+  url: string | null
+}
 
 // Alleen-lezen samenvatting van de inhoud van een stallingscontract (STAL-09, #82).
 // Leest alle optieblokken defensief uit Contract.config met de bestaande lees-/
@@ -28,8 +42,12 @@ import { formatDatum, isMinderjarig } from '@/features/paarden/paardHelpers'
 // acties — die staan los in EigenaarContractActies.
 export default function ContractSamenvatting({
   config,
+  bijlagen = [],
 }: {
   config: Prisma.JsonValue | null
+  // Door de stal gekoppelde bijlagen (STAL-16), met signed URL voor inzage. Optioneel:
+  // de aanroeper haalt ze op en autoriseert de signed URL's.
+  bijlagen?: SamenvattingBijlage[]
 }) {
   const huisvesting = leesHuisvesting(config)
   const { voer, weidegang, faciliteiten } = leesDienstpakket(config)
@@ -37,6 +55,7 @@ export default function ContractSamenvatting({
   const { verzekering, aansprakelijkheid } = leesVerzekeringAansprakelijkheid(config)
   const gezondheid = leesGezondheidsplicht(config)
   const berijder = leesBerijder(config)
+  const extraDiensten = leesExtraDiensten(config)
 
   const jaNee = (v: boolean) => (v ? 'Ja' : 'Nee')
 
@@ -204,6 +223,46 @@ export default function ContractSamenvatting({
           {berijder.relatieTotEigenaar && (
             <Veld label="Relatie tot eigenaar" waarde={berijder.relatieTotEigenaar} />
           )}
+        </Blok>
+      )}
+
+      {extraDiensten.posten.length > 0 && (
+        <Blok titel="Extra diensten (prijslijst)">
+          {extraDiensten.posten.map((post, i) => (
+            <Veld
+              key={i}
+              label={post.omschrijving}
+              waarde={`${formatExtraDienstBedrag(post.bedrag)} (${frequentieLabel(
+                post.frequentie,
+              )})`}
+            />
+          ))}
+        </Blok>
+      )}
+
+      {bijlagen.length > 0 && (
+        <Blok titel="Bijlagen">
+          {bijlagen.map((bijlage) => (
+            <div className="detail-field" key={bijlage.id}>
+              <div className="detail-field-label">
+                {bijlageCategorieLabel(bijlage.categorie)}
+              </div>
+              <div className="detail-field-value">
+                {bijlage.url ? (
+                  <a
+                    href={bijlage.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="form-link"
+                  >
+                    {bijlage.bestandsnaam}
+                  </a>
+                ) : (
+                  bijlage.bestandsnaam
+                )}
+              </div>
+            </div>
+          ))}
         </Blok>
       )}
     </div>
