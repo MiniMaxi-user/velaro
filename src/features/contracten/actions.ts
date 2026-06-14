@@ -40,6 +40,15 @@ import {
   leesVersieGroepId,
 } from './statusMachine'
 import {
+  huidigeEinddatum,
+  leesVerlengBevestiging,
+  leesVerlengHistorie,
+  moetStilzwijgendVerlengen,
+  verlengingsModus,
+  volgendeEinddatum,
+  type VerlengingEntry,
+} from './verlenging'
+import {
   ontbrekendeAanbiedVelden,
   ontbrekendeVeldenSamenvatting,
 } from './aanbiedValidatie'
@@ -852,4 +861,223 @@ export async function getContractPdfUrlVoorEigenaar(
 ): Promise<string | null> {
   await getOwnerDecisionContract(contractId)
   return getSignedUrlVoorContract(contractId)
+}
+
+// ── Verlengen: stilzwijgend & expliciet (STAL-14, #87) ────────────────────────
+
+// Hulp: voert één verlenging door binnen een transactie. Zet de status naar VERLENGD,
+// legt de statusovergang append-only vast in config.statusHistorie, voegt een
+// append-only verleng-entry toe (verlengingen[]) en richt aan beide partijen (stal én
+// eigenaar) een melding via een Message op het paard. De nieuwe einddatum is één
+// oorspronkelijke minimumperiode/looptijd verder (afgeleid via volgendeEinddatum).
+async function voerVerlengingUit(params: {
+  contract: { id: string; horseId: string; status: ContractStatus; config: Prisma.JsonValue | null }
+  doorUserId: string
+  automatisch: boolean
+  // Bevestig-metadata die in dezelfde update moet worden weggeschreven (expliciet),
+  // of null bij stilzwijgend (de bevestig-ronde wordt dan opgeschoond).
+}) {
+  const { contract, doorUserId, automatisch } = params
+
+  // Statusmachine: ACTIEF → VERLENGD of VERLENGD → VERLENGD. Een niet-toegestane
+  // huidige status wordt geweigerd.
+  assertOvergangToegestaan(contract.status, 'VERLENGD')
+
+  const vanEinddatum = huidigeEinddatum(contract.config)
+  const nieuweEinddatum = volgendeEinddatum(contract.config)
+  if (!nieuweEinddatum) {
+    throw new Error(
+      'Dit contract heeft geen einddatum/looptijd en kan niet worden verlengd.',
+    )
+  }
+
+  const modus = verlengingsModus(contract.config)
+  const entry: VerlengingEntry = {
+    modus,
+    vanEinddatum: vanEinddatum ? vanEinddatum.toISOString().slice(0, 10) : null,
+    naarEinddatum: nieuweEinddatum.toISOString().slice(0, 10),
+    op: new Date().toISOString(),
+    automatisch,
+  }
+
+  const metHistorie = metStatusHistorie(
+    contract.config,
+    contract.status,
+    'VERLENGD',
+    doorUserId,
+  )
+  const bestaandeVerlengingen = leesVerlengHistorie(contract.config)
+  // Bevestig-ronde wordt na het doorvoeren opgeschoond; een volgende periode start
+  // met een lege bevestiging.
+  const zonderBevestiging = { ...(metHistorie as Record<string, unknown>) }
+  delete zonderBevestiging.verlengBevestiging
+  const nieuweConfig = {
+    ...zonderBevestiging,
+    verlengingen: [...bestaandeVerlengingen, entry],
+  }
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: contract.horseId },
+    select: { name: true },
+  })
+  const nieuweEinddatumNl = nieuweEinddatum.toLocaleDateString('nl-NL')
+  const omschrijving = automatisch
+    ? `Het stallingscontract voor ${
+        horse?.name ?? 'het paard'
+      } is stilzwijgend verlengd tot ${nieuweEinddatumNl}.`
+    : `Het stallingscontract voor ${
+        horse?.name ?? 'het paard'
+      } is door beide partijen verlengd tot ${nieuweEinddatumNl}.`
+
+  await prisma.$transaction([
+    prisma.contract.update({
+      where: { id: contract.id },
+      data: { status: 'VERLENGD', config: nieuweConfig },
+    }),
+    prisma.message.create({
+      data: {
+        horseId: contract.horseId,
+        authorId: doorUserId,
+        subject: 'Stallingscontract verlengd',
+        body: omschrijving,
+      },
+    }),
+  ])
+}
+
+// LAZY stilzwijgende verlenging. Wordt server-side aangeroepen bij paginabezoek
+// (dashboard `/stal` & `/eigenaar`, contract-detail, paardprofiel). Voor het
+// opgegeven contract: wanneer het stilzwijgend verlengt en het verlengmoment bereikt
+// is, wordt het naar VERLENGD gebracht met een nieuwe periode en krijgen beide
+// partijen een melding. Idempotent: zonder nieuw verlengmoment gebeurt er niets en
+// wordt geen dubbele melding aangemaakt (bewaakt via de huidige einddatum uit de
+// append-only verleng-metadata). Verlengt zo nodig meerdere perioden door wanneer er
+// lang geen bezoek is geweest, zonder per gemiste periode een aparte melding op te
+// stapelen — er wordt per detectiemoment één keer verlengd tot het verlengmoment niet
+// meer bereikt is. Geeft true terug wanneer er daadwerkelijk verlengd is.
+export async function verwerkStilzwijgendeVerlenging(
+  contractId: string,
+): Promise<boolean> {
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } })
+  if (!contract) return false
+  // Alleen actieve/verlengde stalling-contracten komen in aanmerking.
+  if (contract.family !== 'STALLING') return false
+  if (contract.status !== 'ACTIEF' && contract.status !== 'VERLENGD') return false
+  if (!moetStilzwijgendVerlengen(contract.config)) return false
+
+  // Systeemmelding: de stilzwijgende verlenging is geen handeling van een gebruiker.
+  // We schrijven de melding op naam van de wederpartij (eigenaar) wanneer bekend,
+  // anders valt dit terug op een willekeurige stalbeheerder is niet nodig — Message
+  // vereist een authorId. We gebruiken de counterparty (eigenaar) als auteur; is die
+  // er niet, dan slaan we de lazy-verlenging over (een contract zonder eigenaar kan
+  // sowieso niet actief zijn).
+  if (!contract.counterpartyUserId) return false
+
+  await voerVerlengingUit({
+    contract,
+    doorUserId: contract.counterpartyUserId,
+    automatisch: true,
+  })
+  return true
+}
+
+// Verwerkt de stilzwijgende verlenging voor een set contracten (lazy, bij
+// paginabezoek). Idempotent en bestand tegen fouten op individuele contracten zodat
+// een enkel probleemcontract het dashboard niet blokkeert. Geeft het aantal
+// daadwerkelijk verlengde contracten terug.
+export async function verwerkStilzwijgendeVerlengingen(
+  contractIds: string[],
+): Promise<number> {
+  let aantal = 0
+  for (const id of contractIds) {
+    try {
+      if (await verwerkStilzwijgendeVerlenging(id)) aantal += 1
+    } catch {
+      // Bewust stil: een falende verlenging mag het laden van de pagina niet breken.
+    }
+  }
+  return aantal
+}
+
+// Expliciete verlenging: bevestig-actie voor stal (OWNER/STAFF) én eigenaar
+// (counterpartyUserId). Pas wanneer BEIDE partijen voor dezelfde ronde (de huidige
+// einddatum) hebben bevestigd, gaat het contract naar VERLENGD met een nieuwe periode
+// en krijgen beide partijen een melding. Zolang slechts één partij heeft bevestigd
+// blijft de status ongewijzigd (ACTIEF/VERLENGD). De afzonderlijke bevestigingen
+// worden in config.verlengBevestiging bijgehouden. Server-side afgedwongen:
+// autorisatie (stalrol of gekoppelde eigenaar), de EXPLICIET-modus en de statusmachine.
+export async function bevestigVerlenging(contractId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } })
+  if (!contract) throw new Error('Contract niet gevonden')
+
+  // Alleen vanuit een status waar verlengen mag (ACTIEF/VERLENGD).
+  assertOvergangToegestaan(contract.status, 'VERLENGD')
+
+  // Alleen expliciete verlenging kent een bevestig-actie.
+  if (verlengingsModus(contract.config) !== 'EXPLICIET') {
+    throw new Error('Dit contract kent geen expliciete verlenging.')
+  }
+
+  // Autorisatie: ofwel de gekoppelde eigenaar, ofwel een OWNER/STAFF van de stal.
+  const isEigenaar = contract.counterpartyUserId === user.id
+  let isStaf = false
+  if (!isEigenaar) {
+    const role = await getStableRole(user.id, contract.stableId)
+    isStaf = role === 'OWNER' || role === 'STAFF'
+  }
+  if (!isEigenaar && !isStaf) {
+    throw new Error('Je bent niet gemachtigd om dit contract te verlengen.')
+  }
+
+  // De ronde is de huidige einddatum; een nieuwe periode vereist opnieuw bevestiging
+  // van beide partijen.
+  const huidig = huidigeEinddatum(contract.config)
+  if (!huidig) {
+    throw new Error(
+      'Dit contract heeft geen einddatum/looptijd en kan niet worden verlengd.',
+    )
+  }
+  const ronde = huidig.toISOString().slice(0, 10)
+
+  const bestaand = leesVerlengBevestiging(contract.config)
+  // Bij een nieuwe ronde (andere einddatum) starten de bevestigingen opnieuw.
+  const basis =
+    bestaand && bestaand.ronde === ronde
+      ? bestaand
+      : { ronde, doorStal: false, doorEigenaar: false }
+
+  const nieuweBevestiging = {
+    ronde,
+    doorStal: basis.doorStal || isStaf,
+    doorEigenaar: basis.doorEigenaar || isEigenaar,
+  }
+
+  // Beide partijen akkoord → daadwerkelijk verlengen.
+  if (nieuweBevestiging.doorStal && nieuweBevestiging.doorEigenaar) {
+    await voerVerlengingUit({ contract, doorUserId: user.id, automatisch: false })
+  } else {
+    // Eén partij akkoord → alleen de bevestiging vastleggen, status blijft gelijk.
+    const bestaandeConfig =
+      contract.config &&
+      typeof contract.config === 'object' &&
+      !Array.isArray(contract.config)
+        ? (contract.config as Record<string, unknown>)
+        : {}
+    await prisma.contract.update({
+      where: { id: contractId },
+      data: {
+        config: { ...bestaandeConfig, verlengBevestiging: nieuweBevestiging },
+      },
+    })
+  }
+
+  revalidatePath(`/paarden/${contract.horseId}`)
+  revalidatePath('/eigenaar')
+  revalidatePath('/stal/contracten')
 }

@@ -13,10 +13,34 @@ import { heeftBerijder, leesBerijder } from './berijder'
 import { isMinderjarig } from '@/features/paarden/paardHelpers'
 import type { NalevingRegel } from './queries'
 import NieuwContractKnop from './NieuwContractKnop'
-import ContractActies from './ContractActies'
+import ContractActies, { type VerlengContext } from './ContractActies'
 import { ontbrekendeAanbiedVelden } from './aanbiedValidatie'
 import { leesVersieGroepId } from './statusMachine'
+import {
+  kanExplicietBevestigen,
+  leesVerlengBevestiging,
+  volgendeEinddatum,
+} from './verlenging'
+import { formatDatum as formatDatumVerleng } from '@/features/paarden/paardHelpers'
 import type { ContractStatus, Prisma } from '@prisma/client'
+
+// Bouwt de verleng-context (STAL-14, #87) voor de stal-zijde van een contract:
+// alleen voor een actief/verlengd contract met EXPLICIET-modus waarvan het
+// verlengmoment nadert/bereikt is. Anders null (geen bevestig-actie tonen).
+function bouwVerlengContext(
+  status: ContractStatus,
+  config: Prisma.JsonValue | null,
+): VerlengContext | null {
+  if (status !== 'ACTIEF' && status !== 'VERLENGD') return null
+  if (!kanExplicietBevestigen(config)) return null
+  const bevestiging = leesVerlengBevestiging(config)
+  const nieuw = volgendeEinddatum(config)
+  return {
+    doorStal: bevestiging?.doorStal ?? false,
+    doorEigenaar: bevestiging?.doorEigenaar ?? false,
+    nieuweEinddatum: nieuw ? formatDatumVerleng(nieuw) : null,
+  }
+}
 
 type ContractRow = {
   id: string
@@ -129,6 +153,7 @@ export default function ContractenPanel({
                           status={c.status}
                           heeftWederpartij={Boolean(c.counterpartyUserId)}
                           ontbrekendeVelden={ontbrekendeAanbiedVelden(c.config)}
+                          verleng={bouwVerlengContext(c.status, c.config)}
                         />
                       </td>
                     </tr>

@@ -15,10 +15,12 @@ export const TOEGESTANE_OVERGANGEN: Record<ContractStatus, ContractStatus[]> = {
   CONCEPT: ['AANGEBODEN'],
   AANGEBODEN: ['ACTIEF', 'AFGEWEZEN', 'VERVANGEN'],
   GEACCEPTEERD: [],
-  ACTIEF: [],
+  // STAL-14 (#87): een actief contract kan verlengen (stilzwijgend of expliciet).
+  ACTIEF: ['VERLENGD'],
   OPGESCHORT: [],
   OPZEGGING_LOOPT: [],
-  VERLENGD: [],
+  // STAL-14 (#87): een al verlengd contract kan opnieuw verlengen.
+  VERLENGD: ['VERLENGD'],
   BEEINDIGD: [],
   VERLOPEN: [],
   GEANNULEERD: [],

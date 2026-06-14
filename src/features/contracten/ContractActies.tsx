@@ -11,7 +11,18 @@ import {
   previewContractPdf,
 } from './actions'
 import type { OntbrekendBlok } from './aanbiedValidatie'
+import VerlengActies from './VerlengActies'
 import type { ContractStatus } from '@prisma/client'
+
+// Verleng-context voor een actief/verlengd contract met expliciete verlenging
+// (STAL-14, #87). Wordt door de aanroeper (server) berekend en doorgegeven zodat de
+// stal-zijde de bevestig-actie kan tonen. Null wanneer er geen expliciete verlenging
+// te bevestigen is.
+export type VerlengContext = {
+  doorStal: boolean
+  doorEigenaar: boolean
+  nieuweEinddatum: string | null
+}
 
 // Acties per contract in de Contracten-tab. Bij status CONCEPT: "Aanbieden",
 // "Bewerken" en "Verwijderen"; de "Aanbieden"-knop is geblokkeerd zolang verplichte
@@ -26,12 +37,14 @@ export default function ContractActies({
   status,
   heeftWederpartij,
   ontbrekendeVelden,
+  verleng = null,
 }: {
   horseId: string
   contractId: string
   status: ContractStatus
   heeftWederpartij: boolean
   ontbrekendeVelden: OntbrekendBlok[]
+  verleng?: VerlengContext | null
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -161,10 +174,21 @@ export default function ContractActies({
 
   // Concept-acties.
   if (status !== 'CONCEPT') {
-    // GEACCEPTEERD / ACTIEF / VERVANGEN: alleen de opgeslagen PDF openen.
+    // GEACCEPTEERD / ACTIEF / VERLENGD / VERVANGEN: de opgeslagen PDF openen, plus —
+    // bij expliciete verlenging op een actief/verlengd contract — de bevestig-actie
+    // van de stal (STAL-14, #87).
     return (
       <div className="gezondheid-tabel__acties">
         {pdfOpenKnop}
+        {verleng && (
+          <VerlengActies
+            contractId={contractId}
+            partij="STAL"
+            doorStal={verleng.doorStal}
+            doorEigenaar={verleng.doorEigenaar}
+            nieuweEinddatum={verleng.nieuweEinddatum}
+          />
+        )}
         {error && <span className="form-error">{error}</span>}
       </div>
     )

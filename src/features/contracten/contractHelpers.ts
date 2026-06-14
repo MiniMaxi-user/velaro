@@ -1,6 +1,11 @@
 import type { ContractStatus, ContractFamily, Prisma } from '@prisma/client'
 import { leesPrijsLooptijd } from './prijsLooptijd'
 import { leesVersieGroepId } from './statusMachine'
+import {
+  kanExplicietBevestigen,
+  leesVerlengBevestiging,
+  verlengingsModus,
+} from './verlenging'
 
 // Nederlandse labels voor de contractstatussen. Alleen CONCEPT wordt in STAL-01
 // aangemaakt; de overige statussen horen bij latere stories maar zijn hier al
@@ -132,10 +137,31 @@ export function eerstvolgendeActieStal(
   if (contract.status === 'AANGEBODEN') {
     return { label: 'Wacht op eigenaar', badge: 'badge-gold' }
   }
+  // Verleng-signalering (STAL-14, #87) voor actieve/verlengde contracten.
+  const verleng = verlengSignaalStal(contract, vandaag)
+  if (verleng) return verleng
   if (verlooptBinnenkort(afleidEinddatum(contract.config), vandaag)) {
     return { label: 'Verloopt binnenkort', badge: 'badge-warning' }
   }
   return null
+}
+
+// Verleng-signaal voor de stal-weergave bij een actief/verlengd contract. Bij
+// expliciete verlenging waarvan het moment nadert: "Verlenging bevestigen" (of
+// "Wacht op eigenaar" wanneer de stal al bevestigde). Stilzwijgende contracten
+// worden lazy verlengd en hebben hier geen actie. Geen signaal → null.
+function verlengSignaalStal(
+  contract: OverzichtContract,
+  vandaag: Date,
+): OpenstaandeActie | null {
+  if (contract.status !== 'ACTIEF' && contract.status !== 'VERLENGD') return null
+  if (verlengingsModus(contract.config) !== 'EXPLICIET') return null
+  if (!kanExplicietBevestigen(contract.config, vandaag)) return null
+  const bevestiging = leesVerlengBevestiging(contract.config)
+  if (bevestiging?.doorStal && !bevestiging.doorEigenaar) {
+    return { label: 'Wacht op eigenaar', badge: 'badge-gold' }
+  }
+  return { label: 'Verlenging bevestigen', badge: 'badge-warning' }
 }
 
 // Bepaalt de eerstvolgende openstaande actie voor de eigenaar-weergave. De eigenaar
@@ -147,6 +173,19 @@ export function eerstvolgendeActieEigenaar(
 ): OpenstaandeActie | null {
   if (contract.status === 'AANGEBODEN') {
     return { label: 'Te beoordelen', badge: 'badge-gold' }
+  }
+  // Verleng-signalering (STAL-14, #87): bij expliciete verlenging die nadert kan de
+  // eigenaar zijn deel bevestigen.
+  if (
+    (contract.status === 'ACTIEF' || contract.status === 'VERLENGD') &&
+    verlengingsModus(contract.config) === 'EXPLICIET' &&
+    kanExplicietBevestigen(contract.config, vandaag)
+  ) {
+    const bevestiging = leesVerlengBevestiging(contract.config)
+    if (bevestiging?.doorEigenaar && !bevestiging.doorStal) {
+      return { label: 'Wacht op stal', badge: 'badge-gold' }
+    }
+    return { label: 'Verlenging bevestigen', badge: 'badge-warning' }
   }
   if (verlooptBinnenkort(afleidEinddatum(contract.config), vandaag)) {
     return { label: 'Verloopt binnenkort', badge: 'badge-warning' }

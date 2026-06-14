@@ -9,9 +9,16 @@ import {
   getAangebodenContractVoorEigenaar,
   getContractsForEigenaar,
 } from '@/features/contracten/queries'
+import { verwerkStilzwijgendeVerlengingen } from '@/features/contracten/actions'
 import ContractSamenvatting from '@/features/contracten/ContractSamenvatting'
 import ContractOverzicht from '@/features/contracten/ContractOverzicht'
 import EigenaarContractActies from '@/features/contracten/EigenaarContractActies'
+import VerlengActies from '@/features/contracten/VerlengActies'
+import {
+  kanExplicietBevestigen,
+  leesVerlengBevestiging,
+  volgendeEinddatum,
+} from '@/features/contracten/verlenging'
 import { berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
 
 export default async function EigenaarPage() {
@@ -28,7 +35,7 @@ export default async function EigenaarPage() {
     zorgActiesPerPaard,
     voederschemaPerPaard,
     aangebodenContractPerPaard,
-    mijnContracten,
+    eigenaarContractenVoorVerlenging,
   ] = await Promise.all([
     Promise.all(horses.map((h) => getMessagesForHorseView(h.id, 6))),
     Promise.all(horses.map((h) => getUnreadCountForHorseView(user.id, h.id))),
@@ -37,6 +44,16 @@ export default async function EigenaarPage() {
     Promise.all(horses.map((h) => getAangebodenContractVoorEigenaar(h.id, user.id))),
     getContractsForEigenaar(user.id),
   ])
+
+  // Lazy stilzwijgende verlenging (STAL-14, #87): bij bezoek aan het eigenaar-
+  // dashboard verlengen stilzwijgende contracten waarvan het verlengmoment bereikt
+  // is. Idempotent; bij wijziging opnieuw ophalen zodat het overzicht klopt.
+  const verlengd = await verwerkStilzwijgendeVerlengingen(
+    eigenaarContractenVoorVerlenging.map((c) => c.id),
+  )
+  const mijnContracten = verlengd > 0
+    ? await getContractsForEigenaar(user.id)
+    : eigenaarContractenVoorVerlenging
 
   return (
     <>
@@ -74,6 +91,61 @@ export default async function EigenaarPage() {
               />
             </div>
           </div>
+
+          {/* Expliciete verlenging (STAL-14, #87): contracten met EXPLICIET-modus
+              waarvan het verlengmoment nadert/bereikt is en die nog actief/verlengd
+              zijn. De eigenaar kan hier zijn deel bevestigen; pas wanneer beide
+              partijen bevestigen wordt verlengd. */}
+          {(() => {
+            const teVerlengen = mijnContracten.filter(
+              (c) =>
+                (c.status === 'ACTIEF' || c.status === 'VERLENGD') &&
+                kanExplicietBevestigen(c.config),
+            )
+            if (teVerlengen.length === 0) return null
+            return (
+              <div className="panel">
+                <div className="panel-header">
+                  <span className="panel-title">Te verlengen</span>
+                  <span className="badge badge-gold">{teVerlengen.length}</span>
+                </div>
+                <div className="panel-body">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {teVerlengen.map((c) => {
+                      const bevestiging = leesVerlengBevestiging(c.config)
+                      const nieuw = volgendeEinddatum(c.config)
+                      return (
+                        <div
+                          key={c.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 500 }}>{c.horse.name}</div>
+                            <div className="gezondheid-tabel__muted">
+                              Verlengen tot {nieuw ? formatDatum(nieuw) : '—'}
+                            </div>
+                          </div>
+                          <VerlengActies
+                            contractId={c.id}
+                            partij="EIGENAAR"
+                            doorStal={bevestiging?.doorStal ?? false}
+                            doorEigenaar={bevestiging?.doorEigenaar ?? false}
+                            nieuweEinddatum={nieuw ? formatDatum(nieuw) : null}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {horses.map((horse, index) => {
             const leeftijd = horse.dateOfBirth ? berekenLeeftijd(new Date(horse.dateOfBirth)) : null

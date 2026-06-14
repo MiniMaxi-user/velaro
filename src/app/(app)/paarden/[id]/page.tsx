@@ -22,6 +22,7 @@ import {
   type NalevingRegel,
 } from '@/features/contracten/queries'
 import { leesGezondheidsplicht } from '@/features/contracten/gezondheidsplicht'
+import { verwerkStilzwijgendeVerlengingen } from '@/features/contracten/actions'
 import ContractenPanel from '@/features/contracten/ContractenPanel'
 
 interface Props {
@@ -46,7 +47,7 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, berichten, voederschema, contracten] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, berichten, voederschema, contractenInitieel] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
@@ -59,6 +60,15 @@ export default async function PaardDetailPage({ params }: Props) {
   ])
 
   if (!canView) notFound()
+
+  // Lazy stilzwijgende verlenging (STAL-14, #87): bij het openen van het
+  // paardprofiel verlengen stilzwijgende contracten waarvan het verlengmoment
+  // bereikt is. Idempotent; bij wijziging opnieuw ophalen zodat de contracten-tab
+  // de nieuwe status/einddatum toont.
+  const verlengd = await verwerkStilzwijgendeVerlengingen(
+    contractenInitieel.map((c) => c.id),
+  )
+  const contracten = verlengd > 0 ? await getContractsForHorse(id) : contractenInitieel
 
   // Wie het profiel opent, heeft de paardberichten gezien.
   if (berichten.length > 0) {
