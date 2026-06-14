@@ -34,7 +34,11 @@ import {
   type VaccinatieSoort,
 } from './gezondheidsplicht'
 import type { BerijderConfig } from './berijder'
-import { assertOvergangToegestaan, leesStatusHistorie } from './statusMachine'
+import {
+  assertOvergangToegestaan,
+  leesStatusHistorie,
+  leesVersieGroepId,
+} from './statusMachine'
 import {
   ontbrekendeAanbiedVelden,
   ontbrekendeVeldenSamenvatting,
@@ -614,6 +618,105 @@ export async function acceptContract(contractId: string) {
 
   revalidatePath(`/paarden/${contract.horseId}`)
   revalidatePath('/eigenaar')
+}
+
+// Config-sleutels die de inhoudelijke optieblokken van een stallingscontract
+// vormen (STAL-03 t/m STAL-07 + STAL-10). Bij het maken van een nieuwe versie
+// worden uitsluitend deze blokken gekopieerd; status-/versie-metadata
+// (statusHistorie, versieGroepId) worden bewust niet meegekopieerd.
+const CONFIG_OPTIE_SLEUTELS = [
+  'huisvesting',
+  'voer',
+  'weidegang',
+  'faciliteiten',
+  'prijsLooptijd',
+  'verzekeringAansprakelijkheid',
+  'gezondheidsplicht',
+  'berijder',
+] as const
+
+// ── Versionering: nieuwe versie maken vervangt de vorige (STAL-11, #84) ───────
+// Velaro kent bewust geen tegenvoorstel-mechaniek: gewijzigde voorwaarden na een
+// aanbod worden doorgevoerd door een nieuwe versie te maken die de vorige vervangt.
+// Server-side afgedwongen: alleen OWNER/STAFF, en alleen vanuit AANGEBODEN of
+// AFGEWEZEN (via de statusmachine). De huidige versie krijgt status VERVANGEN; er
+// wordt een nieuwe CONCEPT-versie aangemaakt met currentVersion + 1 als kopie van
+// alle config-optieblokken, zodat die direct bewerkt en opnieuw aangeboden kan
+// worden. Beide momenten worden append-only in config.statusHistorie vastgelegd.
+export async function createNewVersion(horseId: string, contractId: string) {
+  // Autorisatie: alleen OWNER/STAFF van de stal van het paard. Paardeigenaren
+  // (zonder stalrol) worden hierdoor geweigerd.
+  const { user, horse } = await getAuthorizedStaff(horseId)
+
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } })
+  if (!contract || contract.horseId !== horseId) {
+    throw new Error('Contract niet gevonden')
+  }
+
+  // Statusmachine: een nieuwe versie mag alleen vanuit AANGEBODEN of AFGEWEZEN.
+  // Een niet-toegestane huidige status (bv. CONCEPT/ACTIEF/VERVANGEN) wordt hier
+  // geweigerd zonder dat er iets verandert.
+  assertOvergangToegestaan(contract.status, 'VERVANGEN')
+
+  // Inhoudelijke optieblokken van de vervangen versie als basis voor de kopie.
+  const bestaandeConfig =
+    contract.config && typeof contract.config === 'object' && !Array.isArray(contract.config)
+      ? (contract.config as Record<string, unknown>)
+      : {}
+  const gekopieerdeOpties: Record<string, unknown> = {}
+  for (const sleutel of CONFIG_OPTIE_SLEUTELS) {
+    if (sleutel in bestaandeConfig) {
+      gekopieerdeOpties[sleutel] = bestaandeConfig[sleutel]
+    }
+  }
+
+  // Versiegroep: versies delen één groep-id (de id van het oorspronkelijke
+  // contract) zodat de historie groepeerbaar is zonder schemawijziging.
+  const versieGroepId = leesVersieGroepId(contract.config) ?? contract.id
+
+  // Oude versie -> VERVANGEN, met append-only statushistorie. Borg ook de groep-id
+  // op de oude versie zodat oudere contracten zonder groep-id alsnog gekoppeld zijn.
+  const vervangenConfig = {
+    ...metStatusHistorie(contract.config, contract.status, 'VERVANGEN', user.id),
+    versieGroepId,
+  }
+
+  // Nieuwe versie: CONCEPT, currentVersion + 1, kopie van de optieblokken, met een
+  // eigen statushistorie die start bij het ontstaan van deze concept-versie.
+  const nieuweVersieConfig = {
+    ...gekopieerdeOpties,
+    versieGroepId,
+    statusHistorie: [
+      {
+        van: contract.status,
+        naar: 'CONCEPT',
+        op: new Date().toISOString(),
+        doorUserId: user.id,
+      },
+    ],
+  }
+
+  await prisma.$transaction([
+    prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'VERVANGEN', config: vervangenConfig },
+    }),
+    prisma.contract.create({
+      data: {
+        horseId,
+        stableId: horse.stableId,
+        family: contract.family,
+        type: contract.type,
+        status: 'CONCEPT',
+        currentVersion: contract.currentVersion + 1,
+        counterpartyUserId: contract.counterpartyUserId,
+        startDate: contract.startDate,
+        config: nieuweVersieConfig,
+      },
+    }),
+  ])
+
+  revalidatePath(`/paarden/${horseId}`)
 }
 
 // Afwijzen: AANGEBODEN → AFGEWEZEN (geen tegenvoorstel). Server-side afgedwongen

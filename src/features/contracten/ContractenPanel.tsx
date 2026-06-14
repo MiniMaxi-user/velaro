@@ -15,6 +15,7 @@ import type { NalevingRegel } from './queries'
 import NieuwContractKnop from './NieuwContractKnop'
 import ContractActies from './ContractActies'
 import { ontbrekendeAanbiedVelden } from './aanbiedValidatie'
+import { leesVersieGroepId } from './statusMachine'
 import type { ContractStatus, Prisma } from '@prisma/client'
 
 type ContractRow = {
@@ -23,9 +24,39 @@ type ContractRow = {
   status: ContractStatus
   startDate: Date | null
   createdAt: Date
+  currentVersion: number
   config: Prisma.JsonValue | null
   counterpartyUserId: string | null
   counterparty: { id: string; name: string | null; email: string } | null
+}
+
+// Groepeert contractversies (STAL-11, #84): versies van eenzelfde contract delen
+// config.versieGroepId; een contract zonder groep-id vormt z'n eigen groep (id).
+// Per groep is de hoogste currentVersion de huidige versie; de overige zijn de
+// (vervangen) historie. Groepen worden gesorteerd op de aanmaakdatum van de
+// huidige versie, nieuwste eerst (sluit aan op de query-volgorde).
+function groepeerVersies(contracts: ContractRow[]): {
+  huidig: ContractRow
+  historie: ContractRow[]
+}[] {
+  const groepen = new Map<string, ContractRow[]>()
+  for (const c of contracts) {
+    const groepId = leesVersieGroepId(c.config) ?? c.id
+    const bestaand = groepen.get(groepId)
+    if (bestaand) bestaand.push(c)
+    else groepen.set(groepId, [c])
+  }
+
+  const resultaat = Array.from(groepen.values()).map((versies) => {
+    const gesorteerd = [...versies].sort((a, b) => b.currentVersion - a.currentVersion)
+    const [huidig, ...historie] = gesorteerd
+    return { huidig, historie }
+  })
+
+  resultaat.sort(
+    (a, b) => b.huidig.createdAt.getTime() - a.huidig.createdAt.getTime(),
+  )
+  return resultaat
 }
 
 export default function ContractenPanel({
@@ -55,6 +86,7 @@ export default function ContractenPanel({
             <thead>
               <tr>
                 <th>Type</th>
+                <th>Versie</th>
                 <th>Wederpartij</th>
                 <th>Ingangsdatum</th>
                 <th>Status</th>
@@ -62,7 +94,7 @@ export default function ContractenPanel({
               </tr>
             </thead>
             <tbody>
-              {contracts.map((c) => {
+              {groepeerVersies(contracts).map(({ huidig: c, historie }) => {
                 const regels = naleving[c.id] ?? []
                 // Berijder (STAL-10): optioneel optieblok. Alleen tonen wanneer een
                 // naam is vastgelegd; bij een geboortedatum een minderjarig-indicatie.
@@ -76,6 +108,7 @@ export default function ContractenPanel({
                   <Fragment key={c.id}>
                     <tr>
                       <td>{contractTypeLabel(c.type)}</td>
+                      <td className="gezondheid-tabel__muted">v{c.currentVersion}</td>
                       <td className="gezondheid-tabel__muted">
                         {c.counterparty
                           ? c.counterparty.name ?? c.counterparty.email
@@ -90,19 +123,41 @@ export default function ContractenPanel({
                         </span>
                       </td>
                       <td>
-                        {c.status === 'CONCEPT' && (
-                          <ContractActies
-                            horseId={horseId}
-                            contractId={c.id}
-                            heeftWederpartij={Boolean(c.counterpartyUserId)}
-                            ontbrekendeVelden={ontbrekendeAanbiedVelden(c.config)}
-                          />
-                        )}
+                        <ContractActies
+                          horseId={horseId}
+                          contractId={c.id}
+                          status={c.status}
+                          heeftWederpartij={Boolean(c.counterpartyUserId)}
+                          ontbrekendeVelden={ontbrekendeAanbiedVelden(c.config)}
+                        />
                       </td>
                     </tr>
+                    {historie.length > 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ paddingTop: 0 }}>
+                          <div className="contract-naleving">
+                            <div className="contract-naleving__titel">Versiehistorie</div>
+                            <ul className="contract-naleving__lijst">
+                              {historie.map((h) => (
+                                <li key={h.id} className="contract-naleving__regel">
+                                  <span className="contract-naleving__onderdeel">
+                                    Versie {h.currentVersion}
+                                  </span>
+                                  <span
+                                    className={`badge ${CONTRACT_STATUS_BADGE[h.status]}`}
+                                  >
+                                    {CONTRACT_STATUS_LABELS[h.status]}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     {regels.length > 0 && (
                       <tr>
-                        <td colSpan={5} style={{ paddingTop: 0 }}>
+                        <td colSpan={6} style={{ paddingTop: 0 }}>
                           <div className="contract-naleving">
                             <div className="contract-naleving__titel">
                               Entings- &amp; gezondheidsplicht
@@ -125,7 +180,7 @@ export default function ContractenPanel({
                     )}
                     {heeftBerijder(berijder) && (
                       <tr>
-                        <td colSpan={5} style={{ paddingTop: 0 }}>
+                        <td colSpan={6} style={{ paddingTop: 0 }}>
                           <div className="contract-naleving">
                             <div className="contract-naleving__titel">Berijder</div>
                             <ul className="contract-naleving__lijst">

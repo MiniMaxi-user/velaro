@@ -4,15 +4,16 @@ import type { ContractStatus } from '@prisma/client'
 // Eén bron van waarheid voor de toegestane statusovergangen van een contract.
 // STAL-08 (#81) introduceerde CONCEPT → AANGEBODEN; STAL-09 (#82) voegt het
 // besluit van de eigenaar toe: AANGEBODEN → ACTIEF (accepteren; v1 in één stap
-// rechtstreeks ACTIEF) en AANGEBODEN → AFGEWEZEN (afwijzen). De map is zo opgezet
-// dat latere stories (versionering, beëindigen) er overgangen aan toevoegen zonder
-// de aanroepers te wijzigen.
+// rechtstreeks ACTIEF) en AANGEBODEN → AFGEWEZEN (afwijzen). STAL-11 (#84) voegt
+// versionering toe: AANGEBODEN → VERVANGEN en AFGEWEZEN → VERVANGEN (de vorige
+// versie wordt vervangen door een nieuwe). De map is zo opgezet dat latere stories
+// (beëindigen) er overgangen aan toevoegen zonder de aanroepers te wijzigen.
 
 // Toegestane vervolgstatussen per huidige status. Een lege lijst betekent dat er
 // (nog) geen overgang vanaf die status gedefinieerd is.
 export const TOEGESTANE_OVERGANGEN: Record<ContractStatus, ContractStatus[]> = {
   CONCEPT: ['AANGEBODEN'],
-  AANGEBODEN: ['ACTIEF', 'AFGEWEZEN'],
+  AANGEBODEN: ['ACTIEF', 'AFGEWEZEN', 'VERVANGEN'],
   GEACCEPTEERD: [],
   ACTIEF: [],
   OPGESCHORT: [],
@@ -21,7 +22,7 @@ export const TOEGESTANE_OVERGANGEN: Record<ContractStatus, ContractStatus[]> = {
   BEEINDIGD: [],
   VERLOPEN: [],
   GEANNULEERD: [],
-  AFGEWEZEN: [],
+  AFGEWEZEN: ['VERVANGEN'],
   VERVANGEN: [],
 }
 
@@ -55,6 +56,17 @@ export type StatusHistorieEntry = {
   naar: ContractStatus
   op: string // ISO-timestamp
   doorUserId: string
+}
+
+// ── Versiegroep in Contract.config (geen schemawijziging) ────────────────────
+// Versies van eenzelfde contract worden gegroepeerd via een gedeelde sleutel in
+// config.versieGroepId (STAL-11, #84). De groep-id is de id van het oorspronkelijke
+// (eerste) contract; elke vervangende versie erft dezelfde groep-id. Zo kan de
+// versiehistorie worden getoond zonder een apart ContractVersion-model.
+export function leesVersieGroepId(config: unknown): string | null {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return null
+  const waarde = (config as Record<string, unknown>).versieGroepId
+  return typeof waarde === 'string' && waarde.length > 0 ? waarde : null
 }
 
 // Leest de statushistorie defensief uit het config-JSON van een contract.
