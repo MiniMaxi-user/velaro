@@ -28,10 +28,13 @@ const COLORS = {
   white: '#FFFFFF',
 }
 
-// Fonts worden geregistreerd vanaf de Google Fonts-CDN (gstatic) TTF-bestanden;
-// react-pdf haalt ze server-side op bij het renderen. Zo matchen we de huisstijl
-// zonder fontbinaries in de repo te hoeven opnemen. Idempotent registreren zodat
-// herhaalde renders binnen hetzelfde proces niet dubbel registreren.
+// Fonts worden lokaal uit public/fonts/ geregistreerd (TTF-binaries in de repo).
+// react-pdf leest ze server-side van schijf bij het renderen. Eerder haalden we
+// ze van de Google Fonts-CDN (gstatic), maar die gebruikt gehashte URL's die
+// Google periodiek roteert — waardoor renders met een 404 faalden. Lokaal
+// bundelen maakt de PDF-generatie netwerk-onafhankelijk en reproduceerbaar.
+// Idempotent registreren zodat herhaalde renders niet dubbel registreren.
+const FONTS_DIR = path.join(process.cwd(), 'public', 'fonts')
 let fontsRegistered = false
 function ensureFonts() {
   if (fontsRegistered) return
@@ -39,11 +42,11 @@ function ensureFonts() {
     family: 'Cormorant Garamond',
     fonts: [
       {
-        src: 'https://fonts.gstatic.com/s/cormorantgaramond/v17/co3bmX5slCNuHLi8bLeY9MK7whWMhyjornFLsS6V7w.ttf',
+        src: path.join(FONTS_DIR, 'CormorantGaramond-Regular.ttf'),
         fontWeight: 400,
       },
       {
-        src: 'https://fonts.gstatic.com/s/cormorantgaramond/v17/co3YmX5slCNuHLi8bLeY9MK7whWMhyjYrEtFvHTPLDA.ttf',
+        src: path.join(FONTS_DIR, 'CormorantGaramond-SemiBold.ttf'),
         fontWeight: 600,
       },
     ],
@@ -52,15 +55,15 @@ function ensureFonts() {
     family: 'Inter',
     fonts: [
       {
-        src: 'https://fonts.gstatic.com/s/inter/v19/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.ttf',
+        src: path.join(FONTS_DIR, 'Inter-Regular.ttf'),
         fontWeight: 400,
       },
       {
-        src: 'https://fonts.gstatic.com/s/inter/v19/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fAZ9hjp-Ek-_EeA.ttf',
+        src: path.join(FONTS_DIR, 'Inter-Medium.ttf'),
         fontWeight: 500,
       },
       {
-        src: 'https://fonts.gstatic.com/s/inter/v19/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hjp-Ek-_EeA.ttf',
+        src: path.join(FONTS_DIR, 'Inter-SemiBold.ttf'),
         fontWeight: 600,
       },
     ],
