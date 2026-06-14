@@ -203,3 +203,14 @@ export async function getHoefsmitBezoeKen(horseId: string) {
 export async function getHoefsmitBezoek(id: string) {
   return prisma.hoefsmitBezoek.findUnique({ where: { id } })
 }
+
+export async function getMetingen(horseId: string) {
+  return prisma.bodyMeasurement.findMany({
+    where: { horseId },
+    orderBy: { date: 'desc' },
+  })
+}
+
+export async function getMeting(id: string) {
+  return prisma.bodyMeasurement.findUnique({ where: { id } })
+}
