@@ -2,6 +2,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
 import { prisma } from '@/lib/prisma'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
 import { ContractPdfDocument } from './ContractPdfDocument'
 import {
   bouwContractPdfData,
@@ -57,7 +58,16 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
   const contract = await prisma.contract.findUnique({
     where: { id: contractId },
     include: {
-      stable: { select: { name: true, address: true, postalCode: true, city: true } },
+      stable: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          postalCode: true,
+          city: true,
+          logoPath: true,
+        },
+      },
       horse: { select: { name: true } },
       counterparty: { select: { name: true, email: true } },
     },
@@ -75,6 +85,10 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
     eigenaarNaam:
       contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende eigenaar',
     paardNaam: contract.horse.name,
+    // Eigen stallogo (#98) als data-URL; null = standaard Velaro-logo.
+    stalLogoDataUrl: contract.stable.logoPath
+      ? await getStableLogoDataUrl(contract.stable.id)
+      : null,
   }
 }
 

@@ -9,13 +9,26 @@ const STAL_LINKS = [
   { href: '/stal/taken', label: 'Taken', exact: false },
 ]
 
+// Alleen zichtbaar voor de OWNER van de actieve stal (#98).
+const OWNER_LINK = { href: '/stal/instellingen', label: 'Instellingen', exact: false }
+
 const EIGENAAR_LINKS = [
   { href: '/paarden', label: 'Mijn paarden', exact: false },
 ]
 
-export default function NavLinks({ isStableMember }: { isStableMember: boolean }) {
+export default function NavLinks({
+  isStableMember,
+  isOwner = false,
+}: {
+  isStableMember: boolean
+  isOwner?: boolean
+}) {
   const pathname = usePathname()
-  const links = isStableMember ? STAL_LINKS : EIGENAAR_LINKS
+  const links = isStableMember
+    ? isOwner
+      ? [...STAL_LINKS, OWNER_LINK]
+      : STAL_LINKS
+    : EIGENAAR_LINKS
 
   return (
     <div className="app-nav__links">

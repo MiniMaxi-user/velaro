@@ -71,7 +71,9 @@ function ensureFonts() {
   fontsRegistered = true
 }
 
-// Absoluut pad naar het logo in public/. react-pdf leest het bestand server-side.
+// Absoluut pad naar het standaard Velaro-logo in public/. react-pdf leest het
+// bestand server-side. Wordt gebruikt als fallback wanneer de stal geen eigen logo
+// heeft ingesteld (#98).
 const LOGO_PATH = path.join(process.cwd(), 'public', 'velaro_logo.png')
 
 const styles = StyleSheet.create({
@@ -227,10 +229,11 @@ export function ContractPdfDocument({ data }: { data: ContractPdfData }) {
       author="Velaro"
     >
       <Page size="A4" style={styles.page}>
-        {/* Kop met logo, titel, versie en generatiedatum */}
+        {/* Kop met logo, titel, versie en generatiedatum. Eigen stallogo (#98)
+            indien aanwezig; anders het standaard Velaro-logo. */}
         <View style={styles.header} fixed>
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          <Image src={LOGO_PATH} style={styles.logo} />
+          <Image src={data.stalLogoDataUrl ?? LOGO_PATH} style={styles.logo} />
           <View style={styles.headerRight}>
             <Text style={styles.title}>{data.titel}</Text>
             <Text style={styles.metaLine}>Versie {data.versie}</Text>

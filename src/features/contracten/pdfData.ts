@@ -58,6 +58,9 @@ export type ContractPdfData = {
   generatieDatum: string
   partijen: PdfPartijen
   secties: PdfSectie[]
+  // Eigen stallogo als data-URL (#98). Aanwezig wanneer de stal een logo heeft
+  // geüpload; anders null en valt de PDF terug op het standaard Velaro-logo.
+  stalLogoDataUrl: string | null
 }
 
 // Minimale contract-vorm die de databouw nodig heeft. Werkt zowel met een uit de
@@ -76,6 +79,8 @@ export type PdfContextInput = {
   stalAdres: string | null
   eigenaarNaam: string
   paardNaam: string
+  // Eigen stallogo als data-URL (#98), of null voor de Velaro-fallback.
+  stalLogoDataUrl?: string | null
 }
 
 const jaNee = (v: boolean) => (v ? 'Ja' : 'Nee')
@@ -349,5 +354,6 @@ export function bouwContractPdfData(
       ingangsdatum: contract.startDate ? formatDatumNL(contract.startDate) : null,
     },
     secties,
+    stalLogoDataUrl: context.stalLogoDataUrl ?? null,
   }
 }

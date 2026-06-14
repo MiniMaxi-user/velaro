@@ -78,6 +78,7 @@ import {
   getSignedUrlVoorContract,
   renderContractPdfBuffer,
 } from './pdf'
+import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
 import type { ContractStatus, Prisma } from '@prisma/client'
 
 // Leest de huisvesting-opties (STAL-03) uit het formulier. Onbekende boxtypes
@@ -864,7 +865,16 @@ async function bouwPdfContextVoorContract(contractId: string) {
   const contract = await prisma.contract.findUnique({
     where: { id: contractId },
     include: {
-      stable: { select: { name: true, address: true, postalCode: true, city: true } },
+      stable: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          postalCode: true,
+          city: true,
+          logoPath: true,
+        },
+      },
       horse: { select: { name: true } },
       counterparty: { select: { name: true, email: true } },
     },
@@ -884,6 +894,10 @@ async function bouwPdfContextVoorContract(contractId: string) {
       eigenaarNaam:
         contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende eigenaar',
       paardNaam: contract.horse.name,
+      // Eigen stallogo (#98) in de preview; null = standaard Velaro-logo.
+      stalLogoDataUrl: contract.stable.logoPath
+        ? await getStableLogoDataUrl(contract.stable.id)
+        : null,
     },
   }
 }

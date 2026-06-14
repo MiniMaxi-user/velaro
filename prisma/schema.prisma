@@ -55,6 +55,12 @@ model Stable {
   // Omschrijving / over de stal
   description String?
 
+  // Eigen stallogo (huisstijl) voor o.a. de contract-PDF. Verwijst naar het pad/key
+  // binnen de privé Supabase Storage-bucket voor stallogo's; null = standaard
+  // Velaro-logo. Per stal instelbaar (een OWNER met meerdere stallen kan per stal
+  // een ander logo hebben).
+  logoPath String?
+
   // Openingstijden (vrij tekstveld, bv. "Ma-vr 07:00-21:00")
   openingHours String?
 
