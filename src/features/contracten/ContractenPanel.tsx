@@ -21,6 +21,12 @@ import {
   leesVerlengBevestiging,
   volgendeEinddatum,
 } from './verlenging'
+import {
+  actievePrijsverlaging,
+  leesOpschorting,
+  leesOpzegging,
+  leesRetentierecht,
+} from './beeindiging'
 import { formatDatum as formatDatumVerleng } from '@/features/paarden/paardHelpers'
 import type { ContractStatus, Prisma } from '@prisma/client'
 
@@ -128,6 +134,41 @@ export default function ContractenPanel({
                   : null
                 const berijderMinderjarig =
                   isMinderjarig(berijderGeboortedatum) === true
+                // Beheer-status (STAL-15, #88): lopende opzegging/opschorting,
+                // actieve tijdelijke prijsverlaging en retentierecht-markering.
+                const opzegging = c.status === 'OPZEGGING_LOOPT' ? leesOpzegging(c.config) : null
+                const opschorting = c.status === 'OPGESCHORT' ? leesOpschorting(c.config) : null
+                const prijsverlaging = actievePrijsverlaging(c.config)
+                const retentie = leesRetentierecht(c.config)
+                const beheerRegels: { label: string; status: string; badge: string }[] = []
+                if (opzegging) {
+                  beheerRegels.push({
+                    label: 'Opzegging',
+                    status: `Eindigt ${formatDatum(new Date(opzegging.einddatum))}`,
+                    badge: 'badge-warning',
+                  })
+                }
+                if (opschorting) {
+                  beheerRegels.push({
+                    label: 'Opschorting',
+                    status: `Tot ${formatDatum(new Date(opschorting.einddatum))}`,
+                    badge: 'badge-warning',
+                  })
+                }
+                if (prijsverlaging) {
+                  beheerRegels.push({
+                    label: 'Tijdelijke prijsverlaging',
+                    status: `Tot ${formatDatum(new Date(prijsverlaging.einddatum))}`,
+                    badge: 'badge-gold',
+                  })
+                }
+                if (retentie.actief) {
+                  beheerRegels.push({
+                    label: 'Wanbetaling / retentierecht',
+                    status: 'Gemarkeerd',
+                    badge: 'badge-danger',
+                  })
+                }
                 return (
                   <Fragment key={c.id}>
                     <tr>
@@ -154,6 +195,7 @@ export default function ContractenPanel({
                           heeftWederpartij={Boolean(c.counterpartyUserId)}
                           ontbrekendeVelden={ontbrekendeAanbiedVelden(c.config)}
                           verleng={bouwVerlengContext(c.status, c.config)}
+                          retentieActief={leesRetentierecht(c.config).actief}
                         />
                       </td>
                     </tr>
@@ -173,6 +215,25 @@ export default function ContractenPanel({
                                   >
                                     {CONTRACT_STATUS_LABELS[h.status]}
                                   </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {beheerRegels.length > 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ paddingTop: 0 }}>
+                          <div className="contract-naleving">
+                            <div className="contract-naleving__titel">Contractbeheer</div>
+                            <ul className="contract-naleving__lijst">
+                              {beheerRegels.map((r, i) => (
+                                <li key={i} className="contract-naleving__regel">
+                                  <span className="contract-naleving__onderdeel">
+                                    {r.label}
+                                  </span>
+                                  <span className={`badge ${r.badge}`}>{r.status}</span>
                                 </li>
                               ))}
                             </ul>

@@ -49,6 +49,13 @@ import {
   type VerlengingEntry,
 } from './verlenging'
 import {
+  berekenOpzegEinddatum,
+  leesOpzegging,
+  opschortEinddatumVerstreken,
+  opzegEinddatumVerstreken,
+  leesPrijsverlagingen,
+} from './beeindiging'
+import {
   ontbrekendeAanbiedVelden,
   ontbrekendeVeldenSamenvatting,
 } from './aanbiedValidatie'
@@ -1080,4 +1087,474 @@ export async function bevestigVerlenging(contractId: string) {
   revalidatePath(`/paarden/${contract.horseId}`)
   revalidatePath('/eigenaar')
   revalidatePath('/stal/contracten')
+}
+
+// ── Opzeggen, opschorten, prijsverlaging & retentierecht (STAL-15, #88) ───────
+// Stal-acties (OWNER/STAFF) op een actief/verlengd stallingscontract. Elke
+// statusovergang loopt via de statusmachine (server-side afgedwongen), wordt
+// append-only in config.statusHistorie gelogd en richt een melding aan de
+// wederpartij via een Message op het paard — in dezelfde stijl als
+// offer/accept/reject/verlengen. Geen facturatie/incasso: prijsverlaging en
+// retentierecht zijn enkel data.
+
+// Helper: laadt een contract en dwingt af dat het bij het paard hoort, dat de
+// huidige gebruiker OWNER/STAFF van de stal is en geeft user + contract terug.
+async function getStaffContract(horseId: string, contractId: string) {
+  const { user } = await getAuthorizedStaff(horseId)
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } })
+  if (!contract || contract.horseId !== horseId) {
+    throw new Error('Contract niet gevonden')
+  }
+  return { user, contract }
+}
+
+// Opzeggen: ACTIEF/VERLENGD → OPZEGGING_LOOPT. Het systeem berekent de einddatum op
+// basis van de opzegtermijn uit STAL-05 (config.prijsLooptijd.looptijd.opzegtermijn).
+// De opzeg-data wordt op het contract bewaard; op de berekende einddatum wordt het
+// contract lazy BEEINDIGD. De wederpartij krijgt een melding.
+export async function opzeggenContract(
+  horseId: string,
+  contractId: string,
+  formData: FormData,
+) {
+  const { user, contract } = await getStaffContract(horseId, contractId)
+
+  // Statusmachine: opzeggen mag alleen vanuit ACTIEF/VERLENGD.
+  assertOvergangToegestaan(contract.status, 'OPZEGGING_LOOPT')
+
+  const reden = (formData.get('reden') as string)?.trim() || null
+  const nu = new Date()
+  const einddatum = berekenOpzegEinddatum(contract.config, nu)
+  const einddatumIso = einddatum.toISOString().slice(0, 10)
+
+  const metHistorie = metStatusHistorie(
+    contract.config,
+    contract.status,
+    'OPZEGGING_LOOPT',
+    user.id,
+  )
+  const nieuweConfig = {
+    ...(metHistorie as Record<string, unknown>),
+    opzegging: {
+      einddatum: einddatumIso,
+      op: nu.toISOString(),
+      doorUserId: user.id,
+      reden,
+    },
+  }
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: horseId },
+    select: { name: true },
+  })
+  const einddatumNl = einddatum.toLocaleDateString('nl-NL')
+
+  await prisma.$transaction([
+    prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'OPZEGGING_LOOPT', config: nieuweConfig },
+    }),
+    prisma.message.create({
+      data: {
+        horseId,
+        authorId: user.id,
+        subject: 'Stallingscontract opgezegd',
+        body: `Het stallingscontract voor ${
+          horse?.name ?? 'het paard'
+        } is opgezegd. Het eindigt op ${einddatumNl}.`,
+      },
+    }),
+  ])
+
+  revalidatePath(`/paarden/${horseId}`)
+  revalidatePath('/eigenaar')
+  revalidatePath('/stal/contracten')
+}
+
+// Opschorten: ACTIEF/VERLENGD → OPGESCHORT met een opgegeven einddatum. Op die
+// einddatum keert het contract lazy terug naar ACTIEF. De wederpartij krijgt een
+// melding.
+export async function opschortenContract(
+  horseId: string,
+  contractId: string,
+  formData: FormData,
+) {
+  const { user, contract } = await getStaffContract(horseId, contractId)
+
+  // Statusmachine: opschorten mag alleen vanuit ACTIEF/VERLENGD.
+  assertOvergangToegestaan(contract.status, 'OPGESCHORT')
+
+  const einddatumStr = (formData.get('einddatum') as string)?.trim()
+  if (!einddatumStr) {
+    throw new Error('Vul een einddatum in voor de opschorting.')
+  }
+  const einddatum = new Date(einddatumStr)
+  if (Number.isNaN(einddatum.getTime())) {
+    throw new Error('De opgegeven einddatum is ongeldig.')
+  }
+  const reden = (formData.get('reden') as string)?.trim() || null
+
+  const metHistorie = metStatusHistorie(
+    contract.config,
+    contract.status,
+    'OPGESCHORT',
+    user.id,
+  )
+  const nieuweConfig = {
+    ...(metHistorie as Record<string, unknown>),
+    opschorting: {
+      einddatum: einddatumStr,
+      op: new Date().toISOString(),
+      doorUserId: user.id,
+      reden,
+    },
+  }
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: horseId },
+    select: { name: true },
+  })
+  const einddatumNl = einddatum.toLocaleDateString('nl-NL')
+
+  await prisma.$transaction([
+    prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'OPGESCHORT', config: nieuweConfig },
+    }),
+    prisma.message.create({
+      data: {
+        horseId,
+        authorId: user.id,
+        subject: 'Stallingscontract opgeschort',
+        body: `Het stallingscontract voor ${
+          horse?.name ?? 'het paard'
+        } is opgeschort tot ${einddatumNl}.`,
+      },
+    }),
+  ])
+
+  revalidatePath(`/paarden/${horseId}`)
+  revalidatePath('/eigenaar')
+  revalidatePath('/stal/contracten')
+}
+
+// Tijdelijke prijsverlaging: afwijkend bedrag + start-/einddatum, als data op het
+// contract (append-only). Geen statuswissel en geen inning/facturatie. Alleen
+// OWNER/STAFF, alleen op een actief/verlengd contract. De wederpartij krijgt een
+// informatieve melding.
+export async function legPrijsverlagingVast(
+  horseId: string,
+  contractId: string,
+  formData: FormData,
+) {
+  const { user, contract } = await getStaffContract(horseId, contractId)
+
+  if (contract.status !== 'ACTIEF' && contract.status !== 'VERLENGD') {
+    throw new Error(
+      'Een prijsverlaging kan alleen op een actief contract worden vastgelegd.',
+    )
+  }
+
+  const bedrag = leesNietNegatiefGetal(
+    formData.get('bedrag'),
+    'Het verlaagde bedrag',
+  )
+  if (bedrag === null) {
+    throw new Error('Vul het verlaagde bedrag in.')
+  }
+  const startdatum = (formData.get('startdatum') as string)?.trim()
+  const einddatum = (formData.get('einddatum') as string)?.trim()
+  if (!startdatum || !einddatum) {
+    throw new Error('Vul een start- en einddatum in voor de prijsverlaging.')
+  }
+  if (new Date(einddatum).getTime() < new Date(startdatum).getTime()) {
+    throw new Error('De einddatum mag niet vóór de startdatum liggen.')
+  }
+  const notitie = (formData.get('notitie') as string)?.trim() || null
+
+  const bestaandeConfig =
+    contract.config && typeof contract.config === 'object' && !Array.isArray(contract.config)
+      ? (contract.config as Record<string, unknown>)
+      : {}
+  const bestaande = leesPrijsverlagingen(contract.config)
+  const nieuweConfig = {
+    ...bestaandeConfig,
+    prijsverlagingen: [
+      ...bestaande,
+      {
+        bedrag,
+        startdatum,
+        einddatum,
+        op: new Date().toISOString(),
+        doorUserId: user.id,
+        notitie,
+      },
+    ],
+  }
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: horseId },
+    select: { name: true },
+  })
+  const startNl = new Date(startdatum).toLocaleDateString('nl-NL')
+  const eindNl = new Date(einddatum).toLocaleDateString('nl-NL')
+
+  await prisma.$transaction([
+    prisma.contract.update({
+      where: { id: contractId },
+      data: { config: nieuweConfig },
+    }),
+    prisma.message.create({
+      data: {
+        horseId,
+        authorId: user.id,
+        subject: 'Tijdelijke prijsverlaging vastgelegd',
+        body: `Voor ${
+          horse?.name ?? 'het paard'
+        } is een tijdelijke prijsverlaging vastgelegd van ${startNl} tot ${eindNl}.`,
+      },
+    }),
+  ])
+
+  revalidatePath(`/paarden/${horseId}`)
+  revalidatePath('/eigenaar')
+  revalidatePath('/stal/contracten')
+}
+
+// Wanbetaling/retentierecht markeren of opheffen: status/notitie als data op het
+// contract (geen incasso, geen statuswissel). Alleen OWNER/STAFF.
+export async function markeerRetentierecht(
+  horseId: string,
+  contractId: string,
+  formData: FormData,
+) {
+  const { user, contract } = await getStaffContract(horseId, contractId)
+
+  const actief = formData.get('actief') !== 'false'
+  const notitie = (formData.get('notitie') as string)?.trim() || null
+
+  const bestaandeConfig =
+    contract.config && typeof contract.config === 'object' && !Array.isArray(contract.config)
+      ? (contract.config as Record<string, unknown>)
+      : {}
+  const nieuweConfig = {
+    ...bestaandeConfig,
+    retentierecht: actief
+      ? {
+          actief: true,
+          op: new Date().toISOString(),
+          doorUserId: user.id,
+          notitie,
+        }
+      : { actief: false, op: null, doorUserId: null, notitie: null },
+  }
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: horseId },
+    select: { name: true },
+  })
+
+  await prisma.$transaction([
+    prisma.contract.update({
+      where: { id: contractId },
+      data: { config: nieuweConfig },
+    }),
+    prisma.message.create({
+      data: {
+        horseId,
+        authorId: user.id,
+        subject: actief
+          ? 'Wanbetaling/retentierecht gemarkeerd'
+          : 'Wanbetaling/retentierecht opgeheven',
+        body: actief
+          ? `Voor het stallingscontract van ${
+              horse?.name ?? 'het paard'
+            } is wanbetaling/retentierecht gemarkeerd.`
+          : `De markering wanbetaling/retentierecht voor het stallingscontract van ${
+              horse?.name ?? 'het paard'
+            } is opgeheven.`,
+      },
+    }),
+  ])
+
+  revalidatePath(`/paarden/${horseId}`)
+  revalidatePath('/eigenaar')
+  revalidatePath('/stal/contracten')
+}
+
+// Beëindigen van rechtswege bij overlijden van het paard: ACTIEF/VERLENGD →
+// BEEINDIGD. Stal-actie; de wederpartij krijgt een melding. Dit dekt zowel
+// overlijden als de versnelde beëindiging die de stal handmatig inroept (bv. na
+// langdurige blessure boven de in het contract vastgelegde drempel) — beide leiden
+// tot een directe, server-side gevalideerde beëindiging met reden.
+export async function beeindigContract(
+  horseId: string,
+  contractId: string,
+  formData: FormData,
+) {
+  const { user, contract } = await getStaffContract(horseId, contractId)
+
+  // Statusmachine: directe beëindiging mag alleen vanuit ACTIEF/VERLENGD.
+  assertOvergangToegestaan(contract.status, 'BEEINDIGD')
+
+  const redenRaw = (formData.get('reden') as string)?.trim()
+  // Toegestane redenen voor een bijzondere beëindiging (§3.4): overlijden van het
+  // paard of versneld opzegrecht bij langdurige blessure.
+  const reden =
+    redenRaw === 'OVERLIJDEN' || redenRaw === 'BLESSURE' ? redenRaw : 'OVERLIJDEN'
+  const toelichting = (formData.get('toelichting') as string)?.trim() || null
+
+  const metHistorie = metStatusHistorie(
+    contract.config,
+    contract.status,
+    'BEEINDIGD',
+    user.id,
+  )
+  const nieuweConfig = {
+    ...(metHistorie as Record<string, unknown>),
+    beeindiging: {
+      reden,
+      toelichting,
+      op: new Date().toISOString(),
+      doorUserId: user.id,
+    },
+  }
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: horseId },
+    select: { name: true },
+  })
+  const redenTekst =
+    reden === 'OVERLIJDEN'
+      ? `is van rechtswege beëindigd wegens het overlijden van ${horse?.name ?? 'het paard'}`
+      : `is versneld beëindigd wegens langdurige blessure van ${horse?.name ?? 'het paard'}`
+
+  await prisma.$transaction([
+    prisma.contract.update({
+      where: { id: contractId },
+      data: { status: 'BEEINDIGD', config: nieuweConfig },
+    }),
+    prisma.message.create({
+      data: {
+        horseId,
+        authorId: user.id,
+        subject: 'Stallingscontract beëindigd',
+        body: `Het stallingscontract ${redenTekst}.`,
+      },
+    }),
+  ])
+
+  revalidatePath(`/paarden/${horseId}`)
+  revalidatePath('/eigenaar')
+  revalidatePath('/stal/contracten')
+}
+
+// ── LAZY tijdgebonden overgangen (STAL-15, #88) ───────────────────────────────
+// Productowner-beslissing: geen cron/scheduler. Bij paginabezoek/serveractie wordt
+// per contract bepaald of een datum-gebaseerde overgang verschuldigd is en die
+// alsnog via de statusmachine toegepast — met een eenmalige (idempotente) melding.
+// De idempotentie volgt uit de statussen zelf: na de overgang is de bron-status weg,
+// dus een volgend bezoek detecteert niets meer (de statusmachine zou de al-uitgevoerde
+// overgang sowieso weigeren). Geeft true terug bij een daadwerkelijke overgang.
+export async function verwerkTijdgebondenOvergang(
+  contractId: string,
+): Promise<boolean> {
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } })
+  if (!contract) return false
+  if (contract.family !== 'STALLING') return false
+  if (!contract.counterpartyUserId) return false
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: contract.horseId },
+    select: { name: true },
+  })
+  const naam = horse?.name ?? 'het paard'
+
+  // OPZEGGING_LOOPT → BEEINDIGD wanneer de opzeg-einddatum verstreken is.
+  if (contract.status === 'OPZEGGING_LOOPT' && opzegEinddatumVerstreken(contract.config)) {
+    assertOvergangToegestaan(contract.status, 'BEEINDIGD')
+    const opzegging = leesOpzegging(contract.config)
+    const metHistorie = metStatusHistorie(
+      contract.config,
+      contract.status,
+      'BEEINDIGD',
+      contract.counterpartyUserId,
+    )
+    const nieuweConfig = {
+      ...(metHistorie as Record<string, unknown>),
+      beeindiging: {
+        reden: 'OPZEGGING',
+        toelichting: opzegging?.reden ?? null,
+        op: new Date().toISOString(),
+        doorUserId: contract.counterpartyUserId,
+      },
+    }
+    await prisma.$transaction([
+      prisma.contract.update({
+        where: { id: contractId },
+        data: { status: 'BEEINDIGD', config: nieuweConfig },
+      }),
+      prisma.message.create({
+        data: {
+          horseId: contract.horseId,
+          authorId: contract.counterpartyUserId,
+          subject: 'Stallingscontract beëindigd',
+          body: `De opzegtermijn is verstreken; het stallingscontract voor ${naam} is beëindigd.`,
+        },
+      }),
+    ])
+    return true
+  }
+
+  // OPGESCHORT → ACTIEF wanneer de opschort-einddatum verstreken is.
+  if (contract.status === 'OPGESCHORT' && opschortEinddatumVerstreken(contract.config)) {
+    assertOvergangToegestaan(contract.status, 'ACTIEF')
+    const metHistorie = metStatusHistorie(
+      contract.config,
+      contract.status,
+      'ACTIEF',
+      contract.counterpartyUserId,
+    )
+    // De opschort-data opschonen zodat een volgende opschorting schoon begint.
+    const zonderOpschorting = { ...(metHistorie as Record<string, unknown>) }
+    delete zonderOpschorting.opschorting
+    await prisma.$transaction([
+      prisma.contract.update({
+        where: { id: contractId },
+        data: {
+          status: 'ACTIEF',
+          config: zonderOpschorting as Prisma.InputJsonValue,
+        },
+      }),
+      prisma.message.create({
+        data: {
+          horseId: contract.horseId,
+          authorId: contract.counterpartyUserId,
+          subject: 'Opschorting beëindigd',
+          body: `De opschorting van het stallingscontract voor ${naam} is afgelopen; het contract is weer actief.`,
+        },
+      }),
+    ])
+    return true
+  }
+
+  return false
+}
+
+// Verwerkt de tijdgebonden overgangen voor een set contracten (lazy, bij
+// paginabezoek). Idempotent en bestand tegen fouten op individuele contracten zodat
+// een enkel probleemcontract het laden van de pagina niet blokkeert. Geeft het aantal
+// daadwerkelijk gewijzigde contracten terug.
+export async function verwerkTijdgebondenOvergangen(
+  contractIds: string[],
+): Promise<number> {
+  let aantal = 0
+  for (const id of contractIds) {
+    try {
+      if (await verwerkTijdgebondenOvergang(id)) aantal += 1
+    } catch {
+      // Bewust stil: een falende overgang mag het laden van de pagina niet breken.
+    }
+  }
+  return aantal
 }

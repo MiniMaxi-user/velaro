@@ -5,7 +5,10 @@ import { getUserStable } from '@/features/paarden/queries'
 import { getMemberships, isPlatformAdmin } from '@/lib/auth/authorization'
 import { getActiveStableId, ALLE_STALLEN } from '@/lib/active-stable'
 import { getContractsForStable } from '@/features/contracten/queries'
-import { verwerkStilzwijgendeVerlengingen } from '@/features/contracten/actions'
+import {
+  verwerkStilzwijgendeVerlengingen,
+  verwerkTijdgebondenOvergangen,
+} from '@/features/contracten/actions'
 import ContractOverzicht from '@/features/contracten/ContractOverzicht'
 
 // Contract-dashboard voor OWNER/STAFF (STAL-13, #86). Overzicht van alle
@@ -38,7 +41,11 @@ export default async function StalContractenPage() {
     const verlengd = await verwerkStilzwijgendeVerlengingen(
       contractenPerStal.flat().map((c) => c.id),
     )
-    if (verlengd > 0) {
+    // Lazy tijdgebonden overgangen (STAL-15, #88): einde opschorting/opzegtermijn.
+    const tijdgebonden = await verwerkTijdgebondenOvergangen(
+      contractenPerStal.flat().map((c) => c.id),
+    )
+    if (verlengd > 0 || tijdgebonden > 0) {
       contractenPerStal = await Promise.all(
         memberships.map((m) => getContractsForStable(m.stableId)),
       )
@@ -92,7 +99,9 @@ export default async function StalContractenPage() {
 
   // Lazy stilzwijgende verlenging (STAL-14, #87) — zie toelichting hierboven.
   const verlengd = await verwerkStilzwijgendeVerlengingen(contracts.map((c) => c.id))
-  if (verlengd > 0) {
+  // Lazy tijdgebonden overgangen (STAL-15, #88): einde opschorting/opzegtermijn.
+  const tijdgebonden = await verwerkTijdgebondenOvergangen(contracts.map((c) => c.id))
+  if (verlengd > 0 || tijdgebonden > 0) {
     contracts = await getContractsForStable(stable.id)
   }
 

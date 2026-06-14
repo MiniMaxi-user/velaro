@@ -22,7 +22,10 @@ import {
   type NalevingRegel,
 } from '@/features/contracten/queries'
 import { leesGezondheidsplicht } from '@/features/contracten/gezondheidsplicht'
-import { verwerkStilzwijgendeVerlengingen } from '@/features/contracten/actions'
+import {
+  verwerkStilzwijgendeVerlengingen,
+  verwerkTijdgebondenOvergangen,
+} from '@/features/contracten/actions'
 import ContractenPanel from '@/features/contracten/ContractenPanel'
 
 interface Props {
@@ -65,10 +68,19 @@ export default async function PaardDetailPage({ params }: Props) {
   // paardprofiel verlengen stilzwijgende contracten waarvan het verlengmoment
   // bereikt is. Idempotent; bij wijziging opnieuw ophalen zodat de contracten-tab
   // de nieuwe status/einddatum toont.
+  // Lazy tijdgebonden overgangen (STAL-15, #88): einde opschorting → ACTIEF en
+  // verstreken opzegtermijn → BEEINDIGD. Samen met de stilzwijgende verlenging
+  // (STAL-14) idempotent uitgevoerd; bij wijziging opnieuw ophalen.
   const verlengd = await verwerkStilzwijgendeVerlengingen(
     contractenInitieel.map((c) => c.id),
   )
-  const contracten = verlengd > 0 ? await getContractsForHorse(id) : contractenInitieel
+  const tijdgebonden = await verwerkTijdgebondenOvergangen(
+    contractenInitieel.map((c) => c.id),
+  )
+  const contracten =
+    verlengd > 0 || tijdgebonden > 0
+      ? await getContractsForHorse(id)
+      : contractenInitieel
 
   // Wie het profiel opent, heeft de paardberichten gezien.
   if (berichten.length > 0) {

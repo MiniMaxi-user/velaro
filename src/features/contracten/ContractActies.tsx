@@ -12,6 +12,7 @@ import {
 } from './actions'
 import type { OntbrekendBlok } from './aanbiedValidatie'
 import VerlengActies from './VerlengActies'
+import BeheerActies from './BeheerActies'
 import type { ContractStatus } from '@prisma/client'
 
 // Verleng-context voor een actief/verlengd contract met expliciete verlenging
@@ -38,6 +39,7 @@ export default function ContractActies({
   heeftWederpartij,
   ontbrekendeVelden,
   verleng = null,
+  retentieActief = false,
 }: {
   horseId: string
   contractId: string
@@ -45,6 +47,8 @@ export default function ContractActies({
   heeftWederpartij: boolean
   ontbrekendeVelden: OntbrekendBlok[]
   verleng?: VerlengContext | null
+  // Of er momenteel wanbetaling/retentierecht gemarkeerd staat (STAL-15, #88).
+  retentieActief?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -187,6 +191,15 @@ export default function ContractActies({
             doorStal={verleng.doorStal}
             doorEigenaar={verleng.doorEigenaar}
             nieuweEinddatum={verleng.nieuweEinddatum}
+          />
+        )}
+        {/* Beheer-acties (STAL-15, #88): opzeggen, opschorten, prijsverlaging,
+            retentierecht en beëindigen — alleen op een actief/verlengd contract. */}
+        {(status === 'ACTIEF' || status === 'VERLENGD') && (
+          <BeheerActies
+            horseId={horseId}
+            contractId={contractId}
+            retentieActief={retentieActief}
           />
         )}
         {error && <span className="form-error">{error}</span>}

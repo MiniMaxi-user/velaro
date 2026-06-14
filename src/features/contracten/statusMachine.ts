@@ -16,11 +16,19 @@ export const TOEGESTANE_OVERGANGEN: Record<ContractStatus, ContractStatus[]> = {
   AANGEBODEN: ['ACTIEF', 'AFGEWEZEN', 'VERVANGEN'],
   GEACCEPTEERD: [],
   // STAL-14 (#87): een actief contract kan verlengen (stilzwijgend of expliciet).
-  ACTIEF: ['VERLENGD'],
-  OPGESCHORT: [],
-  OPZEGGING_LOOPT: [],
+  // STAL-15 (#88): een actief contract kan opgeschort worden, opgezegd worden
+  // (OPZEGGING_LOOPT) of van rechtswege direct beëindigd worden (overlijden paard).
+  ACTIEF: ['VERLENGD', 'OPGESCHORT', 'OPZEGGING_LOOPT', 'BEEINDIGD'],
+  // STAL-15 (#88): een opgeschort contract keert (lazy, op de einddatum) terug naar
+  // ACTIEF.
+  OPGESCHORT: ['ACTIEF'],
+  // STAL-15 (#88): een lopende opzegging wordt op de berekende einddatum (lazy)
+  // beëindigd.
+  OPZEGGING_LOOPT: ['BEEINDIGD'],
   // STAL-14 (#87): een al verlengd contract kan opnieuw verlengen.
-  VERLENGD: ['VERLENGD'],
+  // STAL-15 (#88): ook een verlengd contract kent dezelfde beëindigings-levensloop
+  // als een actief contract (opschorten, opzeggen, beëindigen).
+  VERLENGD: ['VERLENGD', 'OPGESCHORT', 'OPZEGGING_LOOPT', 'BEEINDIGD'],
   BEEINDIGD: [],
   VERLOPEN: [],
   GEANNULEERD: [],

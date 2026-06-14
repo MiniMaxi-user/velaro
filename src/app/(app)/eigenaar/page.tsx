@@ -9,7 +9,10 @@ import {
   getAangebodenContractVoorEigenaar,
   getContractsForEigenaar,
 } from '@/features/contracten/queries'
-import { verwerkStilzwijgendeVerlengingen } from '@/features/contracten/actions'
+import {
+  verwerkStilzwijgendeVerlengingen,
+  verwerkTijdgebondenOvergangen,
+} from '@/features/contracten/actions'
 import ContractSamenvatting from '@/features/contracten/ContractSamenvatting'
 import ContractOverzicht from '@/features/contracten/ContractOverzicht'
 import EigenaarContractActies from '@/features/contracten/EigenaarContractActies'
@@ -51,7 +54,12 @@ export default async function EigenaarPage() {
   const verlengd = await verwerkStilzwijgendeVerlengingen(
     eigenaarContractenVoorVerlenging.map((c) => c.id),
   )
-  const mijnContracten = verlengd > 0
+  // Lazy tijdgebonden overgangen (STAL-15, #88): einde opschorting → ACTIEF en
+  // verstreken opzegtermijn → BEEINDIGD. Idempotent; bij wijziging opnieuw ophalen.
+  const tijdgebonden = await verwerkTijdgebondenOvergangen(
+    eigenaarContractenVoorVerlenging.map((c) => c.id),
+  )
+  const mijnContracten = verlengd > 0 || tijdgebonden > 0
     ? await getContractsForEigenaar(user.id)
     : eigenaarContractenVoorVerlenging
 
