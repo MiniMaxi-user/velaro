@@ -65,24 +65,29 @@ export async function updateOwnerBusinessDetails(userId: string, formData: FormD
 
   const separateInvoiceAddress = formData.get('separateInvoiceAddress') === 'on'
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      companyName: trim('companyName'),
-      address: trim('address'),
-      postalCode: trim('postalCode'),
-      city: trim('city'),
-      country: trim('country'),
-      kvkNumber: trim('kvkNumber'),
-      vatNumber: trim('vatNumber'),
-      separateInvoiceAddress,
-      // Staat de optie uit, dan bewaren we geen afwijkend factuuradres: het
-      // hoofdadres geldt dan als factuuradres.
-      invoiceAddress: separateInvoiceAddress ? trim('invoiceAddress') : null,
-      invoicePostalCode: separateInvoiceAddress ? trim('invoicePostalCode') : null,
-      invoiceCity: separateInvoiceAddress ? trim('invoiceCity') : null,
-      invoiceCountry: separateInvoiceAddress ? trim('invoiceCountry') : null,
-    },
+  // De zakelijke gegevens staan in een 1-1 gekoppeld profiel dat nog niet hoeft
+  // te bestaan voor deze eigenaar — daarom een upsert.
+  const profileData = {
+    companyName: trim('companyName'),
+    address: trim('address'),
+    postalCode: trim('postalCode'),
+    city: trim('city'),
+    country: trim('country'),
+    kvkNumber: trim('kvkNumber'),
+    vatNumber: trim('vatNumber'),
+    separateInvoiceAddress,
+    // Staat de optie uit, dan bewaren we geen afwijkend factuuradres: het
+    // hoofdadres geldt dan als factuuradres.
+    invoiceAddress: separateInvoiceAddress ? trim('invoiceAddress') : null,
+    invoicePostalCode: separateInvoiceAddress ? trim('invoicePostalCode') : null,
+    invoiceCity: separateInvoiceAddress ? trim('invoiceCity') : null,
+    invoiceCountry: separateInvoiceAddress ? trim('invoiceCountry') : null,
+  }
+
+  await prisma.ownerBusinessProfile.upsert({
+    where: { userId },
+    create: { userId, ...profileData },
+    update: profileData,
   })
 
   revalidatePath('/admin/eigenaren')

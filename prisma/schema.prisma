@@ -26,26 +26,6 @@ model User {
   isPlatformAdmin Boolean  @default(false)
   maxStables      Int      @default(0)
 
-  // ── Zakelijke / facturatiegegevens (fundament voor facturatie) ──────────────
-  // Allemaal optioneel zodat bestaande accounts geldig blijven. Plat gehouden,
-  // conform de adresconventie op Stable. Primair bedoeld voor staleigenaar-accounts
-  // (de te factureren klant).
-  companyName   String? // bedrijfs-/factuurnaam
-  address       String?
-  postalCode    String?
-  city          String?
-  country       String?
-  kvkNumber     String? // KvK-nummer
-  vatNumber     String? // btw-nummer
-
-  // Afwijkend factuuradres: pas relevant wanneer aangevinkt. Staat dit uit, dan
-  // geldt het hoofdadres hierboven als factuuradres.
-  separateInvoiceAddress Boolean @default(false)
-  invoiceAddress         String?
-  invoicePostalCode      String?
-  invoiceCity            String?
-  invoiceCountry         String?
-
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -56,6 +36,42 @@ model User {
   messageReads      MessageRead[]
   // Contracten waarin deze gebruiker de wederpartij (paardeigenaar) is.
   counterpartyContracts Contract[] @relation("ContractCounterparty")
+
+  // Zakelijke / facturatiegegevens staan in een apart, 1-1 gekoppeld profiel
+  // (alleen relevant voor staleigenaar-accounts). Optioneel: niet elk account
+  // heeft een profielrij.
+  businessProfile OwnerBusinessProfile?
+}
+
+// ── Zakelijke / facturatiegegevens (fundament voor facturatie) ────────────────
+// 1-1 gekoppeld aan User via de unieke FK userId. Bewust afgesplitst van het
+// account-model zodat accounts zonder zakelijke gegevens (admin, stalmedewerker,
+// bereider, paardeneigenaar) geen ongebruikte kolommen meedragen. Alle velden
+// optioneel/plat gehouden, conform de adresconventie op Stable. Primair bedoeld
+// voor staleigenaar-accounts (de te factureren klant).
+model OwnerBusinessProfile {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName String? // bedrijfs-/factuurnaam
+  address     String?
+  postalCode  String?
+  city        String?
+  country     String?
+  kvkNumber   String? // KvK-nummer
+  vatNumber   String? // btw-nummer
+
+  // Afwijkend factuuradres: pas relevant wanneer aangevinkt. Staat dit uit, dan
+  // geldt het hoofdadres hierboven als factuuradres.
+  separateInvoiceAddress Boolean @default(false)
+  invoiceAddress         String?
+  invoicePostalCode      String?
+  invoiceCity            String?
+  invoiceCountry         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ── Stal (pensionbedrijf) ────────────────────────────────────────────────────

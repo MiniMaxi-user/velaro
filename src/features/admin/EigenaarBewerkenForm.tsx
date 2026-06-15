@@ -4,10 +4,7 @@ import { useActionState, useState } from 'react'
 import { updateOwnerBusinessDetails } from './actions'
 import SubmitButton from '@/components/SubmitButton'
 
-type Owner = {
-  id: string
-  name: string | null
-  email: string
+type BusinessProfile = {
   companyName: string | null
   address: string | null
   postalCode: string | null
@@ -20,6 +17,14 @@ type Owner = {
   invoicePostalCode: string | null
   invoiceCity: string | null
   invoiceCountry: string | null
+}
+
+type Owner = {
+  id: string
+  name: string | null
+  email: string
+  // 1-1 gekoppeld zakelijk profiel; ontbreekt wanneer er nog geen gegevens zijn.
+  businessProfile: BusinessProfile | null
 }
 
 type State = { error?: string; success?: boolean }
@@ -37,8 +42,9 @@ function makeAction(userId: string) {
 }
 
 export default function EigenaarBewerkenForm({ owner }: { owner: Owner }) {
+  const profile = owner.businessProfile
   const [state, formAction] = useActionState(makeAction(owner.id), {})
-  const [separateInvoice, setSeparateInvoice] = useState(owner.separateInvoiceAddress)
+  const [separateInvoice, setSeparateInvoice] = useState(profile?.separateInvoiceAddress ?? false)
 
   return (
     <form action={formAction}>
@@ -72,17 +78,17 @@ export default function EigenaarBewerkenForm({ owner }: { owner: Owner }) {
 
       <div className="form-group">
         <label className="form-label">Bedrijfs- / factuurnaam</label>
-        <input name="companyName" type="text" className="input" defaultValue={owner.companyName ?? ''} placeholder="Pensionstal De Vries B.V." />
+        <input name="companyName" type="text" className="input" defaultValue={profile?.companyName ?? ''} placeholder="Pensionstal De Vries B.V." />
       </div>
 
       <div className="form-row">
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">KvK-nummer</label>
-          <input name="kvkNumber" type="text" className="input" defaultValue={owner.kvkNumber ?? ''} placeholder="12345678" />
+          <input name="kvkNumber" type="text" className="input" defaultValue={profile?.kvkNumber ?? ''} placeholder="12345678" />
         </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">Btw-nummer</label>
-          <input name="vatNumber" type="text" className="input" defaultValue={owner.vatNumber ?? ''} placeholder="NL123456789B01" />
+          <input name="vatNumber" type="text" className="input" defaultValue={profile?.vatNumber ?? ''} placeholder="NL123456789B01" />
         </div>
       </div>
 
@@ -93,23 +99,23 @@ export default function EigenaarBewerkenForm({ owner }: { owner: Owner }) {
 
       <div className="form-group">
         <label className="form-label">Adres</label>
-        <input name="address" type="text" className="input" defaultValue={owner.address ?? ''} placeholder="Stalweg 12" />
+        <input name="address" type="text" className="input" defaultValue={profile?.address ?? ''} placeholder="Stalweg 12" />
       </div>
 
       <div className="form-row">
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">Postcode</label>
-          <input name="postalCode" type="text" className="input" defaultValue={owner.postalCode ?? ''} placeholder="1234 AB" />
+          <input name="postalCode" type="text" className="input" defaultValue={profile?.postalCode ?? ''} placeholder="1234 AB" />
         </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">Plaats</label>
-          <input name="city" type="text" className="input" defaultValue={owner.city ?? ''} placeholder="Amsterdam" />
+          <input name="city" type="text" className="input" defaultValue={profile?.city ?? ''} placeholder="Amsterdam" />
         </div>
       </div>
 
       <div className="form-group">
         <label className="form-label">Land</label>
-        <input name="country" type="text" className="input" defaultValue={owner.country ?? ''} placeholder="Nederland" />
+        <input name="country" type="text" className="input" defaultValue={profile?.country ?? ''} placeholder="Nederland" />
       </div>
 
       {/* Factuuradres */}
@@ -137,23 +143,23 @@ export default function EigenaarBewerkenForm({ owner }: { owner: Owner }) {
         <>
           <div className="form-group">
             <label className="form-label">Factuuradres</label>
-            <input name="invoiceAddress" type="text" className="input" defaultValue={owner.invoiceAddress ?? ''} placeholder="Kantoorstraat 5" />
+            <input name="invoiceAddress" type="text" className="input" defaultValue={profile?.invoiceAddress ?? ''} placeholder="Kantoorstraat 5" />
           </div>
 
           <div className="form-row">
             <div className="form-group" style={{ flex: 1 }}>
               <label className="form-label">Postcode</label>
-              <input name="invoicePostalCode" type="text" className="input" defaultValue={owner.invoicePostalCode ?? ''} placeholder="5678 CD" />
+              <input name="invoicePostalCode" type="text" className="input" defaultValue={profile?.invoicePostalCode ?? ''} placeholder="5678 CD" />
             </div>
             <div className="form-group" style={{ flex: 1 }}>
               <label className="form-label">Plaats</label>
-              <input name="invoiceCity" type="text" className="input" defaultValue={owner.invoiceCity ?? ''} placeholder="Rotterdam" />
+              <input name="invoiceCity" type="text" className="input" defaultValue={profile?.invoiceCity ?? ''} placeholder="Rotterdam" />
             </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Land</label>
-            <input name="invoiceCountry" type="text" className="input" defaultValue={owner.invoiceCountry ?? ''} placeholder="Nederland" />
+            <input name="invoiceCountry" type="text" className="input" defaultValue={profile?.invoiceCountry ?? ''} placeholder="Nederland" />
           </div>
         </>
       )}

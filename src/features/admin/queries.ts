@@ -132,6 +132,7 @@ export async function getOwnerAccount(userId: string) {
   return prisma.user.findUnique({
     where: { id: userId },
     include: {
+      businessProfile: true,
       stableMemberships: {
         where: { role: 'OWNER' },
         include: { stable: { select: { id: true, name: true, city: true } } },
