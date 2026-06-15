@@ -834,6 +834,25 @@ a { color: inherit; text-decoration: none; }
   box-shadow: var(--velaro-shadow-xs);
 }
 
+/* Zoekbalk boven het paardenoverzicht (#119) */
+.paarden-zoek {
+  margin-bottom: 18px;
+}
+
+.paarden-zoek-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  height: auto;
+}
+
+.paarden-zoek-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 /* BUTTONS */
 .btn-primary {
   background: linear-gradient(135deg, var(--velaro-color-gold), var(--velaro-color-gold-2));

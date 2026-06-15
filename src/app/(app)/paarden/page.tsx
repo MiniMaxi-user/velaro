@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
-import { getUserStable, getHorsesForStable, getHorsesForOwner } from '@/features/paarden/queries'
+import { getUserStable, searchHorsesForStables, searchHorsesForOwner } from '@/features/paarden/queries'
 import { berekenLeeftijd, GESLACHT_LABELS } from '@/features/paarden/paardHelpers'
 import { RelatietypeBadge } from '@/features/paarden/RelatieBadges'
+import PaardenZoek from '@/features/paarden/PaardenZoek'
 import { isPlatformAdmin, getMemberships } from '@/lib/auth/authorization'
 import { getActiveStableId, ALLE_STALLEN } from '@/lib/active-stable'
 import { getPaardFotoSignedUrls } from '@/features/paarden/paardFotoStorage'
-import { prisma } from '@/lib/prisma'
 import type { HorseSex } from '@prisma/client'
 
 // Rendert de avatar-cel: de profielfoto (rond) wanneer aanwezig, anders het
@@ -25,13 +25,21 @@ function leeftijdLabel(dateOfBirth: Date | null): string {
   return `${berekenLeeftijd(new Date(dateOfBirth))} jr`
 }
 
-export default async function PaardenPage() {
+export default async function PaardenPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>
+}) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
 
   // Platform admins hebben hun eigen dashboard
   const isAdmin = await isPlatformAdmin(user.id)
   if (isAdmin) redirect('/admin')
+
+  const { q } = await searchParams
+  const query = q?.trim() ?? ''
+  const heeftZoekterm = query.length > 0
 
   const activeStableId = await getActiveStableId(user.id)
   const alleStallen = activeStableId === ALLE_STALLEN
@@ -40,11 +48,7 @@ export default async function PaardenPage() {
   if (alleStallen) {
     const memberships = await getMemberships(user.id)
     const stableIds = memberships.map((m) => m.stableId)
-    const horses = await prisma.horse.findMany({
-      where: { stableId: { in: stableIds } },
-      include: { stable: { select: { name: true } } },
-      orderBy: { name: 'asc' },
-    })
+    const horses = await searchHorsesForStables(stableIds, query)
     const fotoUrls = await getPaardFotoSignedUrls(horses)
 
     return (
@@ -68,7 +72,7 @@ export default async function PaardenPage() {
             <div className="kpi-card-icon">🐴</div>
             <div className="kpi-card-body">
               <div className="kpi-card-value">{horses.length}</div>
-              <div className="kpi-card-label">Totaal paarden</div>
+              <div className="kpi-card-label">{heeftZoekterm ? 'Zoekresultaten' : 'Totaal paarden'}</div>
               <div className="kpi-card-trend flat">alle stallen</div>
             </div>
           </div>
@@ -86,16 +90,27 @@ export default async function PaardenPage() {
           </div>
         </div>
 
+        <PaardenZoek key={query} initialQuery={query} />
+
         {horses.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state__title">Nog geen paarden</div>
-            <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
-              Voeg het eerste paard toe.
-            </p>
-            <div style={{ marginTop: 16 }}>
-              <Link href="/paarden/nieuw" className="btn-primary">+ Nieuw paard</Link>
+          heeftZoekterm ? (
+            <div className="empty-state">
+              <div className="empty-state__title">Geen paarden gevonden</div>
+              <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
+                Geen paarden komen overeen met &ldquo;{query}&rdquo;.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-state__title">Nog geen paarden</div>
+              <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
+                Voeg het eerste paard toe.
+              </p>
+              <div style={{ marginTop: 16 }}>
+                <Link href="/paarden/nieuw" className="btn-primary">+ Nieuw paard</Link>
+              </div>
+            </div>
+          )
         ) : (
           <div className="data-grid-wrapper">
             <table className="data-grid">
@@ -178,7 +193,7 @@ export default async function PaardenPage() {
   const stable = await getUserStable(user.id)
 
   if (stable) {
-    const horses = await getHorsesForStable(stable.id)
+    const horses = await searchHorsesForStables([stable.id], query)
     const fotoUrls = await getPaardFotoSignedUrls(horses)
 
     return (
@@ -204,7 +219,7 @@ export default async function PaardenPage() {
             <div className="kpi-card-icon">🐴</div>
             <div className="kpi-card-body">
               <div className="kpi-card-value">{horses.length}</div>
-              <div className="kpi-card-label">Totaal paarden</div>
+              <div className="kpi-card-label">{heeftZoekterm ? 'Zoekresultaten' : 'Totaal paarden'}</div>
             </div>
           </div>
           <div className="kpi-card">
@@ -232,17 +247,28 @@ export default async function PaardenPage() {
           </div>
         </div>
 
+        <PaardenZoek key={query} initialQuery={query} />
+
         {/* Data grid */}
         {horses.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state__title">Nog geen paarden</div>
-            <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
-              Voeg het eerste paard toe aan {stable.name}.
-            </p>
-            <div style={{ marginTop: 16 }}>
-              <Link href="/paarden/nieuw" className="btn-primary">+ Nieuw paard</Link>
+          heeftZoekterm ? (
+            <div className="empty-state">
+              <div className="empty-state__title">Geen paarden gevonden</div>
+              <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
+                Geen paarden komen overeen met &ldquo;{query}&rdquo;.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-state__title">Nog geen paarden</div>
+              <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
+                Voeg het eerste paard toe aan {stable.name}.
+              </p>
+              <div style={{ marginTop: 16 }}>
+                <Link href="/paarden/nieuw" className="btn-primary">+ Nieuw paard</Link>
+              </div>
+            </div>
+          )
         ) : (
           <div className="data-grid-wrapper">
             <table className="data-grid">
@@ -319,7 +345,7 @@ export default async function PaardenPage() {
   }
 
   // Paardeneigenaar
-  const ownedHorses = await getHorsesForOwner(user.id)
+  const ownedHorses = await searchHorsesForOwner(user.id, query)
   const fotoUrls = await getPaardFotoSignedUrls(ownedHorses)
 
   return (
@@ -333,13 +359,24 @@ export default async function PaardenPage() {
         </div>
       </div>
 
+      {(ownedHorses.length > 0 || heeftZoekterm) && <PaardenZoek key={query} initialQuery={query} />}
+
       {ownedHorses.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state__title">Nog geen paarden gekoppeld</div>
-          <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
-            De beheerder van uw stal koppelt uw paard aan uw account.
-          </p>
-        </div>
+        heeftZoekterm ? (
+          <div className="empty-state">
+            <div className="empty-state__title">Geen paarden gevonden</div>
+            <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
+              Geen paarden komen overeen met &ldquo;{query}&rdquo;.
+            </p>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state__title">Nog geen paarden gekoppeld</div>
+            <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
+              De beheerder van uw stal koppelt uw paard aan uw account.
+            </p>
+          </div>
+        )
       ) : (
         <div className="data-grid-wrapper">
           <table className="data-grid">
