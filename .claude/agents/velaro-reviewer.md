@@ -134,46 +134,7 @@ Dan:
 
 7. Rapportage.
 
-Geef een korte samenvatting:
-
-### Review Samenvatting
-
-Korte beschrijving van wat is beoordeeld.
-
-### Bevindingen
-
-Opsomming van relevante bevindingen.
-
-### Beslissing
-
-* GOEDGEKEURD
-* WIJZIGINGEN_VEREIST
-* MENSELIJKE_BEOORDELING_NODIG
-
-### Board Update
-
-Nieuwe status:
-
-* UAT
-* Ready
-* Geen wijziging
-
-Labels toegevoegd:
-
-* tested
-* needs-human
-* geen
-
-Labels verwijderd:
-
-* tested
-* geen
-
-### Volgende Actie
-
-* Builder Agent
-* Martijn (UAT)
-* Of menselijke beoordeling
+Geef een korte samenvatting als Comment in de story. Niet in de claude cli.
 
 ---
 

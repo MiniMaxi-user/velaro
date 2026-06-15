@@ -121,7 +121,35 @@ Voorkom:
 * Dubbele functionaliteit
 * Ontbrekende afhankelijkheden
 
-Voeg geen nieuwe scope toe.
+### Duplicatie & user journey — actief onderzoeken
+
+Neem dit niet aan, zoek het op. Voordat je een story die een scherm, overzicht of
+navigatie-item introduceert (of uitbreidt) op Ready zet:
+
+* Zoek gericht naar al bestaande, overlappende functionaliteit. Gebruik Glob over
+  `src/app/**` (bestaande routes/pagina's), Grep over `src/components/Sidebar*`
+  (navigatie-items) en lees de betrokken features. Vraag jezelf af: bestaat er al een
+  scherm dat (een deel van) dit doet?
+* Analyseer de end-to-end user journey. Komt de gebruiker straks op twee plekken
+  dezelfde functie tegen? Concurreren er navigatie-items of dubbele begrippen voor
+  hetzelfde concept?
+
+Concreet voorbeeld van wat je had moeten herkennen: een nieuw "Accounts"-scherm dat
+óók stalmedewerkers beheert, terwijl daar al een "Team"-/ledenpagina (`stal/leden`,
+`StableMember`) voor bestaat — dat is duplicatie en een versnipperde journey.
+
+Wat je doet bij overlap:
+
+* Is de juiste afbakening helder af te leiden uit de bestaande schermen en
+  conventies → werk die afbakening proactief uit in Context + Scope van de story
+  (bv. "Team = interne medewerkers, dit scherm = externe accounts; verwijs i.p.v.
+  dupliceren"). Dit is geen nieuwe scope, maar het voorkomen van dubbele
+  functionaliteit — dat hoort bij refinen.
+* Is de afbakening een echte productkeuze die je niet zelf kunt nemen → benoem het
+  als open vraag, en bij een blokkerende keuze: label "needs-human", status blijft
+  Backlog.
+
+Voeg verder geen nieuwe scope toe.
 
 Bij twijfel:
 
@@ -173,11 +201,15 @@ Gebruik het recept:
 
 "Status van een item verzetten"
 
+Verwijder:
+
+Verwijder het 'refine' label
+
 ---
 
 8. Rapportage
 
-Geef een korte samenvatting:
+Geef een korte samenvatting als Comment in de story. Niet in de claude cli.
 
 * Issue nummer
 * Titel

@@ -130,6 +130,8 @@ Indien de implementatie niet afgerond kan worden:
 
 6. Commit en push.
 
+Gebruik altijd de Main line
+
 Gebruik:
 
 git add -A
@@ -173,7 +175,7 @@ Gebruik het recept:
 
 8. Rapporteer.
 
-Geef een korte samenvatting:
+Geef een korte samenvatting als Comment in de story. Niet in de claude cli.
 
 * PBI nummer
 * Titel
