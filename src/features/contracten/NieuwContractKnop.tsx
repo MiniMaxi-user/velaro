@@ -6,8 +6,10 @@ import type { ContractPoort } from './relatietypeMatching'
 // Knop "Nieuw stallingscontract". De poort (#113) bepaalt of de knop bruikbaar is:
 // een contract kan pas worden aangemaakt wanneer relatietype = pensionpaard,
 // stallingsvorm ∈ {volledig pension, halfpension} én er een eigenaar gekoppeld is.
-// Is de poort dicht, dan is de knop uitgeschakeld met een toelichting eronder zodat
-// de gebruiker weet wat er nog ontbreekt.
+//
+// Is de poort dicht, dan tonen we een korte vaste melding met een i-icoon; de
+// concrete reden (variabele lengte) zit in een hover/focus-tooltip (#115). Zo blijft
+// de layout stabiel en staat de knop altijd rechts.
 export default function NieuwContractKnop({
   horseId,
   poort,
@@ -19,11 +21,19 @@ export default function NieuwContractKnop({
 
   if (!poort.toegestaan) {
     return (
-      <div className="nieuw-contract-poort">
-        <button type="button" className="btn-primary" disabled title={poort.reden}>
+      <div className="contract-poort">
+        <span className="contract-poort__melding">
+          Contract aanmaken niet mogelijk
+          <span className="info-tip" tabIndex={0} role="note" aria-label={poort.reden}>
+            <span className="info-tip__icon" aria-hidden="true">i</span>
+            <span className="info-tip__bubble" role="tooltip">
+              {poort.reden}
+            </span>
+          </span>
+        </span>
+        <button type="button" className="btn-primary" disabled>
           Nieuw stallingscontract
         </button>
-        <span className="form-hint">{poort.reden}</span>
       </div>
     )
   }
