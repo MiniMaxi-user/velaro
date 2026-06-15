@@ -5,6 +5,7 @@ import { getHorse } from '@/features/paarden/queries'
 import { getStableRole } from '@/lib/auth/authorization'
 import ContractForm from '@/features/contracten/ContractForm'
 import { createStallingContract } from '@/features/contracten/actions'
+import { matchContractVoorRelatietype } from '@/features/contracten/relatietypeMatching'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -36,6 +37,11 @@ export default async function NieuwContractPage({ params }: Props) {
 
   const action = createStallingContract.bind(null, id)
 
+  // Contract-matching op basis van het relatietype (#105): pensionpaard levert een
+  // overschrijfbare STALLING/FULL_PENSION-voorselectie; andere relatietypes leveren
+  // hooguit een informatieve indicatie.
+  const match = matchContractVoorRelatietype(horse.relatietype)
+
   return (
     <main className="page-container">
       <div className="page-header">
@@ -47,7 +53,13 @@ export default async function NieuwContractPage({ params }: Props) {
         <h1 className="page-title">{horse.name}</h1>
       </div>
 
-      <ContractForm horseId={id} action={action} owners={owners} />
+      <ContractForm
+        horseId={id}
+        action={action}
+        owners={owners}
+        typeVoorselectie={match.voorselectie ?? undefined}
+        relatietypeIndicatie={match.indicatie ?? undefined}
+      />
     </main>
   )
 }
