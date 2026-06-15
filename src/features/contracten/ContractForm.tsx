@@ -41,6 +41,8 @@ import {
   type ExtraDienstenConfig,
   type Frequentie,
 } from './bijlagenDiensten'
+import { contractTypeLabel, CONTRACT_FAMILY_LABELS } from './contractHelpers'
+import type { ContractVoorselectie } from './relatietypeMatching'
 
 type OwnerOption = { userId: string; label: string }
 
@@ -66,6 +68,8 @@ export default function ContractForm({
   berijder,
   bijlagenConfig,
   extraDiensten,
+  typeVoorselectie,
+  relatietypeIndicatie,
   submitLabel = 'Concept aanmaken',
 }: {
   horseId: string
@@ -73,6 +77,12 @@ export default function ContractForm({
   owners: OwnerOption[]
   defaultCounterpartyUserId?: string
   defaultStartDate?: string
+  // Overschrijfbare voorselectie van het contracttype op basis van het relatietype
+  // van het paard (#105). Standaard STALLING/FULL_PENSION bij een pensionpaard.
+  typeVoorselectie?: ContractVoorselectie
+  // Informatieve indicatie wanneer het relatietype geen (bouwbare) voorselectie
+  // oplevert (#105), bijv. lease/lespaard/opdracht. Puur informatief.
+  relatietypeIndicatie?: string
   // Wanneer meegegeven, toont het formulier de sectie "Huisvesting & verzorging".
   // Op het bewerkscherm vullen we boxNumber voor uit het paardprofiel (overschrijfbaar).
   huisvesting?: HuisvestingConfig
@@ -169,10 +179,23 @@ export default function ContractForm({
             id="type"
             type="text"
             className="input"
-            value="Stalling — Full pension"
+            value={
+              typeVoorselectie
+                ? `${CONTRACT_FAMILY_LABELS[typeVoorselectie.family]} — ${contractTypeLabel(typeVoorselectie.type)}`
+                : 'Stalling — Full pension'
+            }
             readOnly
             disabled
           />
+          {typeVoorselectie && (
+            <span className="form-hint">
+              Voorgeselecteerd op basis van het relatietype van het paard. Je kunt dit
+              wijzigen.
+            </span>
+          )}
+          {relatietypeIndicatie && (
+            <span className="form-hint">{relatietypeIndicatie}</span>
+          )}
         </div>
 
         <div className="form-group">
