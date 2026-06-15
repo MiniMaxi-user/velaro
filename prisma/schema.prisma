@@ -145,10 +145,13 @@ model Horse {
   discipline      String?
   disciplineLevel String?
 
-  // Eigendom: true = stalpaard (eigendom van de stal zelf),
-  // false = pensionpaard (gestald door een externe eigenaar).
-  // Sluit elkaar uit: een stalpaard heeft geen externe HorseOwner-koppeling.
-  ownedByStable Boolean @default(true)
+  // Twee onafhankelijke, naast elkaar bestaande kenmerken van het paard:
+  //  - As 1: relatietype (relatie/eigendom met de stal). Stal/extern volgt
+  //    impliciet uit deze waarde; de concrete externe eigenaar uit
+  //    HorsePerson.isOwner = true. Nullable: nog niet altijd ingevuld.
+  //  - As 2: stallingsvorm (afgenomen dienst), los van As 1. Nullable.
+  relatietype   HorseRelatietype?
+  stallingsvorm HorseStallingsvorm?
 
   // Welzijn / EU
   excludedFromConsumption     Boolean   @default(false)
@@ -184,6 +187,31 @@ enum HorseSex {
   MARE     // merrie
   STALLION // hengst
   GELDING  // ruin
+}
+
+// As 1 — Relatietype: relatie/eigendom van het paard met de stal. Eén waarde
+// per paard. Vervangt het oude boolean-veld ownedByStable.
+enum HorseRelatietype {
+  STALPAARD          // stalpaard / eigen paard (eigendom van de stal)
+  PENSIONPAARD       // pensionpaard (gestald door externe eigenaar)
+  LESPAARD           // lespaard / manegepaard
+  LEASEPAARD         // leasepaard
+  TRAININGSPAARD     // trainings- / beleerpaard
+  VERKOOPPAARD       // verkoop- / handelspaard
+  FOKPAARD           // fokpaard
+  OPFOKPAARD         // opfokpaard
+  REVALIDATIEPAARD   // revalidatie- / herstelpaard
+  RUSTPAARD          // rust- / pensioenpaard
+}
+
+// As 2 — Stallingsvorm: afgenomen stallingsdienst, los van het relatietype.
+// Eén waarde per paard.
+enum HorseStallingsvorm {
+  VOLLEDIG_PENSION // volledig pension
+  HALFPENSION      // halfpension
+  WEIDESTALLING    // weidestalling / grass livery
+  PADDOCK          // paddock / trailbox
+  TIJDELIJK        // tijdelijke / nachtstalling
 }
 
 // Koppelt een persoon (account) aan een paard met een of beide rollen:

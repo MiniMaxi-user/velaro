@@ -136,7 +136,7 @@ export default async function PaardDetailPage({ params }: Props) {
           <Link href="/paarden" className="detail-back">← Terug naar paarden</Link>
           <h1 className="detail-title">{horse.name}</h1>
           <div className="detail-meta">
-            <EigendomBadge ownedByStable={horse.ownedByStable} />
+            <EigendomBadge ownedByStable={horse.relatietype === 'STALPAARD'} />
             {horse.breed && <span className="badge badge-navy">{horse.breed}</span>}
             {leeftijd !== null && <span className="badge badge-neutral">{leeftijd} jaar</span>}
             {horse.sex && <span className="badge badge-neutral">{GESLACHT_LABELS[horse.sex]}</span>}

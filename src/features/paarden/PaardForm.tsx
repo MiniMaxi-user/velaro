@@ -100,7 +100,7 @@ export default function PaardForm({ horse }: Props) {
             id="ownedByStable"
             name="ownedByStable"
             className="input"
-            defaultValue={(horse?.ownedByStable ?? true) ? 'true' : 'false'}
+            defaultValue={(horse?.relatietype ?? 'STALPAARD') === 'STALPAARD' ? 'true' : 'false'}
           >
             <option value="true">Stalpaard (eigendom van de stal)</option>
             <option value="false">Pension (externe eigenaar)</option>

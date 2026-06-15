@@ -1,4 +1,4 @@
-import type { HorseSex } from '@prisma/client'
+import type { HorseSex, HorseRelatietype, HorseStallingsvorm } from '@prisma/client'
 
 export const DISCIPLINE_OPTIES = [
   'Dressuur',
@@ -12,6 +12,30 @@ export const GESLACHT_LABELS: Record<HorseSex, string> = {
   MARE: 'Merrie',
   STALLION: 'Hengst',
   GELDING: 'Ruin',
+}
+
+// As 1 — Relatietype (relatie/eigendom met de stal). Nederlandse UI-labels,
+// herbruikbaar in de UI (#104) en de contractmodule (#105).
+export const RELATIETYPE_LABELS: Record<HorseRelatietype, string> = {
+  STALPAARD: 'Stalpaard',
+  PENSIONPAARD: 'Pensionpaard',
+  LESPAARD: 'Lespaard',
+  LEASEPAARD: 'Leasepaard',
+  TRAININGSPAARD: 'Trainingspaard',
+  VERKOOPPAARD: 'Verkooppaard',
+  FOKPAARD: 'Fokpaard',
+  OPFOKPAARD: 'Opfokpaard',
+  REVALIDATIEPAARD: 'Revalidatiepaard',
+  RUSTPAARD: 'Rustpaard',
+}
+
+// As 2 — Stallingsvorm (afgenomen dienst). Nederlandse UI-labels.
+export const STALLINGSVORM_LABELS: Record<HorseStallingsvorm, string> = {
+  VOLLEDIG_PENSION: 'Volledig pension',
+  HALFPENSION: 'Halfpension',
+  WEIDESTALLING: 'Weidestalling',
+  PADDOCK: 'Paddock',
+  TIJDELIJK: 'Tijdelijke stalling',
 }
 
 export function berekenLeeftijd(dateOfBirth: Date): number {
