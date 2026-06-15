@@ -4,7 +4,7 @@ import { voegMaandenToe } from './verlenging'
 
 // ── Opzeggen, opschorten, prijsverlaging & retentierecht (STAL-15, #88) ──────
 // Vierde blok in de levensloop van een actief stallingscontract (§3.2/§3.4 +
-// §6 journey F/S3 uit `velaro-contracten.md`). Net als bij eerdere stories wordt
+// §6 journey F/S3 uit `docs/velaro-contracten.md`). Net als bij eerdere stories wordt
 // alle metadata append-only/als data in Contract.config bewaard — géén
 // schemawijziging. De tijdgebonden overgangen (einde opschorting → ACTIEF; einde
 // opzegtermijn → BEEINDIGD; einde prijsverlaging) worden LAZY berekend bij
