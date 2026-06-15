@@ -7,7 +7,7 @@ import { GESLACHT_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarde
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
 import PersonenBeheer from '@/features/paarden/PersonenBeheer'
 import PersonenInfo from '@/features/paarden/PersonenInfo'
-import { getVaccinaties, getOntwormingen, getDierenartsBezzoeken, getHoefsmitBezoeKen } from '@/features/gezondheid/queries'
+import { getVaccinaties, getOntwormingen, getDierenartsBezzoeken, getHoefsmitBezoeKen, getMetingen } from '@/features/gezondheid/queries'
 import GezondheidTabs from '@/features/gezondheid/GezondheidTabs'
 import { getMessagesForHorse } from '@/features/berichten/queries'
 import { markMessagesRead } from '@/features/berichten/actions'
@@ -50,13 +50,14 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, berichten, voederschema, contractenInitieel] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
     getOntwormingen(id),
     getDierenartsBezzoeken(id),
     getHoefsmitBezoeKen(id),
+    getMetingen(id),
     getMessagesForHorse(id),
     getFeedingPlan(id),
     getContractsForHorse(id),
@@ -226,6 +227,7 @@ export default async function PaardDetailPage({ params }: Props) {
             ontwormingen={ontwormingen}
             bezzoeken={bezzoeken}
             hoefsmitBezoeKen={hoefsmitBezoeKen}
+            metingen={metingen}
             canEdit={canEdit}
           />
         )

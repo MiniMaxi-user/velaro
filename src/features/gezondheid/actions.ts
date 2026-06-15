@@ -226,3 +226,67 @@ export async function deleteHoefsmitBezoek(id: string, horseId: string) {
   await prisma.hoefsmitBezoek.delete({ where: { id } })
   revalidatePath(`/paarden/${horseId}`)
 }
+
+// ── Gewicht & metingen ───────────────────────────────────────────────────────
+
+function parseMeetwaarde(value: FormDataEntryValue | null): number | null {
+  const str = (value as string)?.trim().replace(',', '.')
+  if (!str) return null
+  const num = Number(str)
+  return Number.isFinite(num) ? num : null
+}
+
+function parseMetingFields(formData: FormData) {
+  const dateStr = formData.get('date') as string
+  if (!dateStr) throw new Error('Datum is verplicht')
+
+  const weightKg = parseMeetwaarde(formData.get('weightKg'))
+  const heightCmRaw = parseMeetwaarde(formData.get('heightCm'))
+  const heightCm = heightCmRaw === null ? null : Math.round(heightCmRaw)
+  const bodyConditionScore = parseMeetwaarde(formData.get('bodyConditionScore'))
+
+  if (weightKg === null && heightCm === null && bodyConditionScore === null) {
+    throw new Error('Vul ten minste één meetwaarde in (gewicht, stokmaat of BCS)')
+  }
+
+  return {
+    date: new Date(dateStr),
+    weightKg,
+    heightCm,
+    bodyConditionScore,
+    measuredBy: (formData.get('measuredBy') as string)?.trim() || null,
+    notes: (formData.get('notes') as string)?.trim() || null,
+  }
+}
+
+export async function createMeting(horseId: string, formData: FormData) {
+  await getAuthorizedUser(horseId)
+
+  await prisma.bodyMeasurement.create({
+    data: {
+      horseId,
+      ...parseMetingFields(formData),
+    },
+  })
+
+  revalidatePath(`/paarden/${horseId}`)
+  redirect(`/paarden/${horseId}`)
+}
+
+export async function updateMeting(id: string, horseId: string, formData: FormData) {
+  await getAuthorizedUser(horseId)
+
+  await prisma.bodyMeasurement.update({
+    where: { id },
+    data: parseMetingFields(formData),
+  })
+
+  revalidatePath(`/paarden/${horseId}`)
+  redirect(`/paarden/${horseId}`)
+}
+
+export async function deleteMeting(id: string, horseId: string) {
+  await getAuthorizedUser(horseId)
+  await prisma.bodyMeasurement.delete({ where: { id } })
+  revalidatePath(`/paarden/${horseId}`)
+}

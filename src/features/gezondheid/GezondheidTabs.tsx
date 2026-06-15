@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import type { Vaccination, Deworming, VetVisit, HoefsmitBezoek } from '@prisma/client'
+import type { Vaccination, Deworming, VetVisit, HoefsmitBezoek, BodyMeasurement } from '@prisma/client'
 import DeleteGezondheidButton from './DeleteGezondheidButton'
 import { formatDatum } from '@/features/paarden/paardHelpers'
 
@@ -43,10 +43,16 @@ interface Props {
   ontwormingen: Deworming[]
   bezzoeken: VetVisit[]
   hoefsmitBezoeKen: HoefsmitBezoek[]
+  metingen: BodyMeasurement[]
   canEdit: boolean
 }
 
-type TabId = 'vaccinaties' | 'ontworming' | 'dierenarts' | 'hoefsmit'
+type TabId = 'vaccinaties' | 'ontworming' | 'dierenarts' | 'hoefsmit' | 'metingen'
+
+function formatMeetwaarde(value: number | null, eenheid: string): string {
+  if (value === null || value === undefined) return '—'
+  return `${value} ${eenheid}`
+}
 
 export default function GezondheidTabs({
   horseId,
@@ -54,6 +60,7 @@ export default function GezondheidTabs({
   ontwormingen,
   bezzoeken,
   hoefsmitBezoeKen,
+  metingen,
   canEdit,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('vaccinaties')
@@ -73,6 +80,7 @@ export default function GezondheidTabs({
     { id: 'ontworming',  label: 'Ontworming',  count: ontwormingen.length,     urgent: urgentOntworming },
     { id: 'dierenarts',  label: 'Dierenarts',  count: bezzoeken.length,        urgent: 0 },
     { id: 'hoefsmit',   label: 'Hoefsmit',    count: hoefsmitBezoeKen.length, urgent: urgentHoefsmit },
+    { id: 'metingen',   label: 'Gewicht & metingen', count: metingen.length,  urgent: 0 },
   ]
 
   return (
@@ -120,6 +128,11 @@ export default function GezondheidTabs({
             )}
             {activeTab === 'hoefsmit' && (
               <Link href={`/paarden/${horseId}/hoefsmit/nieuw`} className="btn-ghost btn-ghost--sm">
+                + Toevoegen
+              </Link>
+            )}
+            {activeTab === 'metingen' && (
+              <Link href={`/paarden/${horseId}/metingen/nieuw`} className="btn-ghost btn-ghost--sm">
                 + Toevoegen
               </Link>
             )}
@@ -280,6 +293,49 @@ export default function GezondheidTabs({
                         </svg>
                       </Link>
                       <DeleteGezondheidButton id={h.id} horseId={horseId} type="hoefsmit" />
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      )}
+
+      {/* Tab-inhoud: Gewicht & metingen */}
+      {activeTab === 'metingen' && (
+        metingen.length === 0 ? (
+          <div className="gezondheid-leeg">Nog geen metingen geregistreerd.</div>
+        ) : (
+          <table className="gezondheid-tabel">
+            <thead>
+              <tr>
+                <th>Datum</th>
+                <th>Gewicht</th>
+                <th>Stokmaat</th>
+                <th>BCS</th>
+                <th>Gemeten door</th>
+                <th>Notities</th>
+                {canEdit && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {metingen.map((m) => (
+                <tr key={m.id}>
+                  <td>{formatDatum(new Date(m.date))}</td>
+                  <td>{formatMeetwaarde(m.weightKg, 'kg')}</td>
+                  <td>{formatMeetwaarde(m.heightCm, 'cm')}</td>
+                  <td>{m.bodyConditionScore != null ? m.bodyConditionScore : '—'}</td>
+                  <td className="gezondheid-tabel__muted">{m.measuredBy ?? '—'}</td>
+                  <td className="gezondheid-tabel__muted">{m.notes ?? '—'}</td>
+                  {canEdit && (
+                    <td className="gezondheid-tabel__acties">
+                      <Link href={`/paarden/${horseId}/metingen/${m.id}/bewerken`} className="btn-icon" title="Bewerken" aria-label="Bewerken">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                        </svg>
+                      </Link>
+                      <DeleteGezondheidButton id={m.id} horseId={horseId} type="meting" />
                     </td>
                   )}
                 </tr>

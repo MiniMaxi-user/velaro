@@ -167,6 +167,7 @@ model Horse {
   dewormings      Deworming[]
   vetVisits       VetVisit[]
   hoefsmitBezoeken HoefsmitBezoek[]
+  bodyMeasurements BodyMeasurement[]
   tasks           Task[]
   messages        Message[]
   recurringTasks  RecurringTask[]
@@ -347,6 +348,25 @@ model HoefsmitBezoek {
   nextDate  DateTime?
   notes     String?
   createdAt DateTime  @default(now())
+
+  @@index([horseId])
+}
+
+// ── Gewicht & metingen ───────────────────────────────────────────────────────
+// Conditie-/groeiregistratie per paard (gewicht, stokmaat, BCS). Bewust géén
+// nextDate: een meting kent geen herhaalvervaldatum. Bij invoer is minimaal
+// `date` plus ten minste één meetwaarde vereist (app-laag valideert dat).
+model BodyMeasurement {
+  id                 String    @id @default(uuid()) @db.Uuid
+  horseId            String    @db.Uuid
+  horse              Horse     @relation(fields: [horseId], references: [id], onDelete: Cascade)
+  date               DateTime
+  weightKg           Float?
+  heightCm           Int?
+  bodyConditionScore Float?
+  measuredBy         String?
+  notes              String?
+  createdAt          DateTime  @default(now())
 
   @@index([horseId])
 }
