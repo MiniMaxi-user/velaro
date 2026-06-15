@@ -55,6 +55,40 @@ export async function createOwnerAccount(formData: FormData) {
   redirect('/admin/eigenaren')
 }
 
+export async function updateOwnerBusinessDetails(userId: string, formData: FormData) {
+  await requirePlatformAdmin()
+
+  const trim = (key: string): string | null => {
+    const value = (formData.get(key) as string | null)?.trim()
+    return value ? value : null
+  }
+
+  const separateInvoiceAddress = formData.get('separateInvoiceAddress') === 'on'
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      companyName: trim('companyName'),
+      address: trim('address'),
+      postalCode: trim('postalCode'),
+      city: trim('city'),
+      country: trim('country'),
+      kvkNumber: trim('kvkNumber'),
+      vatNumber: trim('vatNumber'),
+      separateInvoiceAddress,
+      // Staat de optie uit, dan bewaren we geen afwijkend factuuradres: het
+      // hoofdadres geldt dan als factuuradres.
+      invoiceAddress: separateInvoiceAddress ? trim('invoiceAddress') : null,
+      invoicePostalCode: separateInvoiceAddress ? trim('invoicePostalCode') : null,
+      invoiceCity: separateInvoiceAddress ? trim('invoiceCity') : null,
+      invoiceCountry: separateInvoiceAddress ? trim('invoiceCountry') : null,
+    },
+  })
+
+  revalidatePath('/admin/eigenaren')
+  revalidatePath(`/admin/eigenaren/${userId}`)
+}
+
 export async function updateStableQuota(userId: string, formData: FormData) {
   await requirePlatformAdmin()
 

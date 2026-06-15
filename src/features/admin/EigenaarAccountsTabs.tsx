@@ -146,6 +146,7 @@ export default function EigenaarAccountsTabs({ stableOwners, horseOwners }: Prop
                   <th>Stallen</th>
                   <th>Quotum</th>
                   <th>Aangemaakt</th>
+                  <th>Gegevens</th>
                   <th>Quotum beheren</th>
                 </tr>
               </thead>
@@ -186,6 +187,15 @@ export default function EigenaarAccountsTabs({ stableOwners, horseOwners }: Prop
                     </td>
                     <td style={{ color: 'var(--velaro-color-muted)', fontSize: 12 }}>
                       {formatDate(owner.createdAt)}
+                    </td>
+                    <td>
+                      <Link
+                        href={`/admin/eigenaren/${owner.id}`}
+                        className="btn-ghost"
+                        style={{ padding: '6px 12px', fontSize: 13 }}
+                      >
+                        Zakelijke gegevens
+                      </Link>
                     </td>
                     <td>
                       <QuotumForm userId={owner.id} currentMax={owner.maxStables} />
@@ -247,15 +257,14 @@ export default function EigenaarAccountsTabs({ stableOwners, horseOwners }: Prop
                         </div>
                       </td>
                       <td>
+                        {/* Geen link naar /paarden/{id}: de platform-admin hoort de
+                            operationele staldetails van een klant niet in te zien.
+                            Alleen de paardnaam als tekst. */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           {owner.horsePeople.map((ho) => (
-                            <Link
-                              key={ho.horse.id}
-                              href={`/paarden/${ho.horse.id}`}
-                              style={{ fontSize: 12, color: 'var(--velaro-color-gold-2)' }}
-                            >
+                            <span key={ho.horse.id} style={{ fontSize: 12 }}>
                               {ho.horse.name}
-                            </Link>
+                            </span>
                           ))}
                         </div>
                       </td>

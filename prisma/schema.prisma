@@ -25,6 +25,27 @@ model User {
   name            String?
   isPlatformAdmin Boolean  @default(false)
   maxStables      Int      @default(0)
+
+  // ── Zakelijke / facturatiegegevens (fundament voor facturatie) ──────────────
+  // Allemaal optioneel zodat bestaande accounts geldig blijven. Plat gehouden,
+  // conform de adresconventie op Stable. Primair bedoeld voor staleigenaar-accounts
+  // (de te factureren klant).
+  companyName   String? // bedrijfs-/factuurnaam
+  address       String?
+  postalCode    String?
+  city          String?
+  country       String?
+  kvkNumber     String? // KvK-nummer
+  vatNumber     String? // btw-nummer
+
+  // Afwijkend factuuradres: pas relevant wanneer aangevinkt. Staat dit uit, dan
+  // geldt het hoofdadres hierboven als factuuradres.
+  separateInvoiceAddress Boolean @default(false)
+  invoiceAddress         String?
+  invoicePostalCode      String?
+  invoiceCity            String?
+  invoiceCountry         String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
