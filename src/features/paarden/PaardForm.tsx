@@ -3,7 +3,13 @@
 import { useState, useActionState } from 'react'
 import type { Horse } from '@prisma/client'
 import { createHorse, updateHorse } from './actions'
-import { GESLACHT_LABELS, DISCIPLINE_OPTIES, formatDateForInput } from './paardHelpers'
+import {
+  GESLACHT_LABELS,
+  DISCIPLINE_OPTIES,
+  RELATIETYPE_LABELS,
+  STALLINGSVORM_LABELS,
+  formatDateForInput,
+} from './paardHelpers'
 import SubmitButton from '@/components/SubmitButton'
 import Link from 'next/link'
 
@@ -95,15 +101,32 @@ export default function PaardForm({ horse }: Props) {
         </div>
 
         <div className="form-group">
-          <label htmlFor="ownedByStable" className="form-label">Eigendom</label>
+          <label htmlFor="relatietype" className="form-label">Relatietype</label>
           <select
-            id="ownedByStable"
-            name="ownedByStable"
+            id="relatietype"
+            name="relatietype"
             className="input"
-            defaultValue={(horse?.relatietype ?? 'STALPAARD') === 'STALPAARD' ? 'true' : 'false'}
+            defaultValue={horse?.relatietype ?? ''}
           >
-            <option value="true">Stalpaard (eigendom van de stal)</option>
-            <option value="false">Pension (externe eigenaar)</option>
+            <option value="">— selecteer —</option>
+            {(Object.keys(RELATIETYPE_LABELS) as Array<keyof typeof RELATIETYPE_LABELS>).map((key) => (
+              <option key={key} value={key}>{RELATIETYPE_LABELS[key]}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="stallingsvorm" className="form-label">Stallingsvorm</label>
+          <select
+            id="stallingsvorm"
+            name="stallingsvorm"
+            className="input"
+            defaultValue={horse?.stallingsvorm ?? ''}
+          >
+            <option value="">— selecteer —</option>
+            {(Object.keys(STALLINGSVORM_LABELS) as Array<keyof typeof STALLINGSVORM_LABELS>).map((key) => (
+              <option key={key} value={key}>{STALLINGSVORM_LABELS[key]}</option>
+            ))}
           </select>
         </div>
       </div>

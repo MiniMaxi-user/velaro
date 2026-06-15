@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { getStableRole } from '@/lib/auth/authorization'
-import type { HorseSex } from '@prisma/client'
+import type { HorseSex, HorseRelatietype, HorseStallingsvorm } from '@prisma/client'
 import { getUserStable } from './queries'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -35,11 +35,16 @@ function parseHorseFormData(formData: FormData) {
   const excludedFromConsumption = formData.get('excludedFromConsumption') === 'true'
   const excludedDateStr = formData.get('excludedFromConsumptionDate') as string
 
+  const relatietypeStr = (formData.get('relatietype') as string)?.trim()
+  const stallingsvormStr = (formData.get('stallingsvorm') as string)?.trim()
+
   return {
     name,
     breed: (formData.get('breed') as string)?.trim() || null,
     dateOfBirth: dateOfBirthStr ? new Date(dateOfBirthStr) : null,
     sex: sexStr ? (sexStr as HorseSex) : null,
+    relatietype: relatietypeStr ? (relatietypeStr as HorseRelatietype) : null,
+    stallingsvorm: stallingsvormStr ? (stallingsvormStr as HorseStallingsvorm) : null,
     color: (formData.get('color') as string)?.trim() || null,
     chipNumber,
     ueln: (formData.get('ueln') as string)?.trim() || null,

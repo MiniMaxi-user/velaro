@@ -962,11 +962,6 @@ a { color: inherit; text-decoration: none; }
 .badge-danger  { background: var(--velaro-color-danger-bg); border-color: var(--velaro-color-danger-border); color: var(--velaro-color-danger); }
 .badge-neutral { background: var(--velaro-color-surf-2); border-color: var(--velaro-color-border-strong); color: var(--velaro-color-muted); }
 
-/* Eigendom-badge (stalpaard vs. pension): prominenter dan de overige badges
-   dankzij het gevulde rondje-icoon en een iets zwaardere tekst. */
-.eigendom-badge { font-weight: 600; }
-.eigendom-badge .eigendom-badge-dot { flex-shrink: 0; }
-
 /* Naleving entings-/gezondheidsplicht (STAL-07): compacte status-uitklap onder een
    contractregel die de afgesproken plicht afzet tegen de gezondheidsregistratie. */
 .contract-naleving {
