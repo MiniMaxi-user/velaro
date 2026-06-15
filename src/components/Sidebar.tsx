@@ -36,6 +36,11 @@ export default async function Sidebar() {
     activeStableId !== ALLE_STALLEN &&
     (await getStableRole(user.id, activeStableId)) === 'OWNER'
 
+  // OWNER van minstens één stal? Bepaalt of het externe-accounts-scherm (#114)
+  // zichtbaar is. Dit scherm aggregeert over alle OWNER-stallen, dus het item
+  // blijft ook in "alle stallen"-modus zichtbaar.
+  const isOwnerOfAny = memberships.some((m) => m.role === 'OWNER')
+
   let rolLabel = isPlatformAdmin
     ? 'Platform Admin'
     : activeStableId === ALLE_STALLEN
@@ -51,6 +56,7 @@ export default async function Sidebar() {
       isStableMember={isStableMember}
       isPlatformAdmin={isPlatformAdmin}
       isOwner={isOwner}
+      isOwnerOfAny={isOwnerOfAny}
       canManageStables={canManageStables}
       userEmail={user.email}
       userRole={rolLabel}

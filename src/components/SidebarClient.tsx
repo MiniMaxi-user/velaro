@@ -78,6 +78,7 @@ interface Props {
   isStableMember: boolean
   isPlatformAdmin: boolean
   isOwner: boolean
+  isOwnerOfAny: boolean
   canManageStables: boolean
   userEmail: string | undefined
   userRole?: string
@@ -89,6 +90,7 @@ export default function SidebarClient({
   isStableMember,
   isPlatformAdmin,
   isOwner,
+  isOwnerOfAny,
   canManageStables,
   userEmail,
   userRole,
@@ -114,6 +116,10 @@ export default function SidebarClient({
       { href: '/paarden',    label: 'Paarden',      icon: 'horse',     exact: false },
       { href: '/stal/contracten', label: 'Contracten', icon: 'contract', exact: false },
       { href: '/stal/leden', label: 'Team',          icon: 'team',      exact: false },
+      // Externe accounts (paardeneigenaren & bereiders): alleen voor de OWNER (#114).
+      ...(isOwnerOfAny
+        ? [{ href: '/stal/accounts', label: 'Accounts', icon: 'team', exact: false }]
+        : []),
       { href: '/stal/taken', label: 'Taken',         icon: 'check',     exact: false },
       // Alleen voor de OWNER van de actieve stal (#98).
       ...(isOwner
