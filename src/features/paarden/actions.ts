@@ -35,10 +35,6 @@ function parseHorseFormData(formData: FormData) {
   const excludedFromConsumption = formData.get('excludedFromConsumption') === 'true'
   const excludedDateStr = formData.get('excludedFromConsumptionDate') as string
 
-  // Eigendom: true = stalpaard, false = pension (externe eigenaar).
-  // Default true wanneer het veld ontbreekt (consistent met het schema-default).
-  const ownedByStable = (formData.get('ownedByStable') as string) !== 'false'
-
   return {
     name,
     breed: (formData.get('breed') as string)?.trim() || null,
@@ -49,7 +45,6 @@ function parseHorseFormData(formData: FormData) {
     ueln: (formData.get('ueln') as string)?.trim() || null,
     passportNumber: (formData.get('passportNumber') as string)?.trim() || null,
     boxNumber: (formData.get('boxNumber') as string)?.trim() || null,
-    ownedByStable,
     sireName: (formData.get('sireName') as string)?.trim() || null,
     damName: (formData.get('damName') as string)?.trim() || null,
     discipline: (formData.get('discipline') as string)?.trim() || null,

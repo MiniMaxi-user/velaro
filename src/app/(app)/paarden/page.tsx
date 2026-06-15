@@ -111,7 +111,7 @@ export default async function PaardenPage() {
                             <div className="cell-entity-sub">UELN {horse.ueln}</div>
                           )}
                           <div style={{ marginTop: 4 }}>
-                            <EigendomBadge ownedByStable={horse.ownedByStable} />
+                            <EigendomBadge ownedByStable={horse.relatietype === 'STALPAARD'} />
                           </div>
                         </div>
                       </Link>
@@ -254,7 +254,7 @@ export default async function PaardenPage() {
                             <div className="cell-entity-sub">UELN {horse.ueln}</div>
                           )}
                           <div style={{ marginTop: 4 }}>
-                            <EigendomBadge ownedByStable={horse.ownedByStable} />
+                            <EigendomBadge ownedByStable={horse.relatietype === 'STALPAARD'} />
                           </div>
                         </div>
                       </Link>
