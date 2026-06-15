@@ -61,6 +61,9 @@ export type ContractPdfData = {
   // Eigen stallogo als data-URL (#98). Aanwezig wanneer de stal een logo heeft
   // geüpload; anders null en valt de PDF terug op het standaard Velaro-logo.
   stalLogoDataUrl: string | null
+  // Profielfoto van het paard als data-URL (#118). Aanwezig wanneer het paard een
+  // foto heeft; anders null en bevat de PDF geen lege fotoplaats.
+  paardFotoDataUrl: string | null
 }
 
 // Minimale contract-vorm die de databouw nodig heeft. Werkt zowel met een uit de
@@ -81,6 +84,8 @@ export type PdfContextInput = {
   paardNaam: string
   // Eigen stallogo als data-URL (#98), of null voor de Velaro-fallback.
   stalLogoDataUrl?: string | null
+  // Profielfoto van het paard als data-URL (#118), of null wanneer er geen foto is.
+  paardFotoDataUrl?: string | null
 }
 
 const jaNee = (v: boolean) => (v ? 'Ja' : 'Nee')
@@ -355,5 +360,6 @@ export function bouwContractPdfData(
     },
     secties,
     stalLogoDataUrl: context.stalLogoDataUrl ?? null,
+    paardFotoDataUrl: context.paardFotoDataUrl ?? null,
   }
 }

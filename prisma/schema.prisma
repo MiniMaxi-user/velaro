@@ -169,6 +169,11 @@ model Horse {
   relatietype   HorseRelatietype?
   stallingsvorm HorseStallingsvorm?
 
+  // Profielfoto (#118): pad in de privé Supabase Storage-bucket `horse-photos`.
+  // Net als het stallogo bewaren we enkel het storage-pad; de foto zelf staat in
+  // Storage en wordt server-side via een signed URL (UI) of data-URL (PDF) ingezien.
+  photoPath String?
+
   // Welzijn / EU
   excludedFromConsumption     Boolean   @default(false)
   excludedFromConsumptionDate DateTime?

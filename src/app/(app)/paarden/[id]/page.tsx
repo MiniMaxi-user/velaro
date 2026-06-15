@@ -28,6 +28,7 @@ import {
 } from '@/features/contracten/actions'
 import ContractenPanel from '@/features/contracten/ContractenPanel'
 import { bepaalContractPoort } from '@/features/contracten/relatietypeMatching'
+import { getPaardFotoSignedUrl } from '@/features/paarden/paardFotoStorage'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -51,7 +52,7 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel, fotoUrl] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
@@ -62,6 +63,7 @@ export default async function PaardDetailPage({ params }: Props) {
     getMessagesForHorse(id),
     getFeedingPlan(id),
     getContractsForHorse(id),
+    getPaardFotoSignedUrl(id),
   ])
 
   const stalleden = role ? await getStableMembersForHorse(id) : []
@@ -135,8 +137,20 @@ export default async function PaardDetailPage({ params }: Props) {
       <div className="detail-header">
         <div className="detail-header-left">
           <Link href="/paarden" className="detail-back">← Terug naar paarden</Link>
-          <h1 className="detail-title">{horse.name}</h1>
-          <div className="detail-meta">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {fotoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={fotoUrl}
+                alt={`Foto van ${horse.name}`}
+                className="paard-foto-avatar paard-foto-avatar--md"
+              />
+            ) : (
+              <div className="paard-foto-avatar paard-foto-avatar--md paard-foto-avatar--placeholder" aria-hidden>🐴</div>
+            )}
+            <h1 className="detail-title" style={{ margin: 0 }}>{horse.name}</h1>
+          </div>
+          <div className="detail-meta" style={{ marginTop: 8 }}>
             <RelatietypeBadge relatietype={horse.relatietype} />
             <StallingsvormBadge stallingsvorm={horse.stallingsvorm} />
             {horse.breed && <span className="badge badge-navy">{horse.breed}</span>}

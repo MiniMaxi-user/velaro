@@ -79,6 +79,7 @@ import {
   renderContractPdfBuffer,
 } from './pdf'
 import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
+import { getPaardFotoDataUrl } from '@/features/paarden/paardFotoStorage'
 import { bepaalContractPoort } from './relatietypeMatching'
 import type { ContractStatus, Prisma } from '@prisma/client'
 
@@ -890,7 +891,7 @@ async function bouwPdfContextVoorContract(contractId: string) {
           logoPath: true,
         },
       },
-      horse: { select: { name: true } },
+      horse: { select: { id: true, name: true, photoPath: true } },
       counterparty: { select: { name: true, email: true } },
     },
   })
@@ -912,6 +913,10 @@ async function bouwPdfContextVoorContract(contractId: string) {
       // Eigen stallogo (#98) in de preview; null = standaard Velaro-logo.
       stalLogoDataUrl: contract.stable.logoPath
         ? await getStableLogoDataUrl(contract.stable.id)
+        : null,
+      // Profielfoto van het paard (#118) in de preview; null = geen foto.
+      paardFotoDataUrl: contract.horse.photoPath
+        ? await getPaardFotoDataUrl(contract.horse.id)
         : null,
     },
   }

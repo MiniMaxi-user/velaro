@@ -6,8 +6,19 @@ import { berekenLeeftijd, GESLACHT_LABELS } from '@/features/paarden/paardHelper
 import { RelatietypeBadge } from '@/features/paarden/RelatieBadges'
 import { isPlatformAdmin, getMemberships } from '@/lib/auth/authorization'
 import { getActiveStableId, ALLE_STALLEN } from '@/lib/active-stable'
+import { getPaardFotoSignedUrls } from '@/features/paarden/paardFotoStorage'
 import { prisma } from '@/lib/prisma'
 import type { HorseSex } from '@prisma/client'
+
+// Rendert de avatar-cel: de profielfoto (rond) wanneer aanwezig, anders het
+// standaard paard-icoon. fotoUrls is een batch-map (horseId → signed URL).
+function PaardAvatar({ naam, url }: { naam: string; url: string | undefined }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={`Foto van ${naam}`} className="paard-foto-avatar" />
+  }
+  return <span aria-hidden>🐴</span>
+}
 
 function leeftijdLabel(dateOfBirth: Date | null): string {
   if (!dateOfBirth) return '—'
@@ -34,6 +45,7 @@ export default async function PaardenPage() {
       include: { stable: { select: { name: true } } },
       orderBy: { name: 'asc' },
     })
+    const fotoUrls = await getPaardFotoSignedUrls(horses)
 
     return (
       <>
@@ -104,7 +116,7 @@ export default async function PaardenPage() {
                   <tr key={horse.id}>
                     <td>
                       <Link href={`/paarden/${horse.id}`} className="cell-entity" style={{ textDecoration: 'none' }}>
-                        <div className="cell-avatar">🐴</div>
+                        <div className="cell-avatar"><PaardAvatar naam={horse.name} url={fotoUrls[horse.id]} /></div>
                         <div>
                           <div className="cell-entity-name">{horse.name}</div>
                           {horse.ueln && (
@@ -167,6 +179,7 @@ export default async function PaardenPage() {
 
   if (stable) {
     const horses = await getHorsesForStable(stable.id)
+    const fotoUrls = await getPaardFotoSignedUrls(horses)
 
     return (
       <>
@@ -249,7 +262,7 @@ export default async function PaardenPage() {
                   <tr key={horse.id}>
                     <td>
                       <Link href={`/paarden/${horse.id}`} className="cell-entity" style={{ textDecoration: 'none' }}>
-                        <div className="cell-avatar">🐴</div>
+                        <div className="cell-avatar"><PaardAvatar naam={horse.name} url={fotoUrls[horse.id]} /></div>
                         <div>
                           <div className="cell-entity-name">{horse.name}</div>
                           {horse.ueln && (
@@ -307,6 +320,7 @@ export default async function PaardenPage() {
 
   // Paardeneigenaar
   const ownedHorses = await getHorsesForOwner(user.id)
+  const fotoUrls = await getPaardFotoSignedUrls(ownedHorses)
 
   return (
     <>
@@ -343,7 +357,7 @@ export default async function PaardenPage() {
                 <tr key={horse.id}>
                   <td>
                     <Link href={`/paarden/${horse.id}`} className="cell-entity" style={{ textDecoration: 'none' }}>
-                      <div className="cell-avatar">🐴</div>
+                      <div className="cell-avatar"><PaardAvatar naam={horse.name} url={fotoUrls[horse.id]} /></div>
                       <div>
                         <div className="cell-entity-name">{horse.name}</div>
                       </div>

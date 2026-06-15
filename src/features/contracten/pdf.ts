@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { prisma } from '@/lib/prisma'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
+import { getPaardFotoDataUrl } from '@/features/paarden/paardFotoStorage'
 import { ContractPdfDocument } from './ContractPdfDocument'
 import {
   bouwContractPdfData,
@@ -68,7 +69,7 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
           logoPath: true,
         },
       },
-      horse: { select: { name: true } },
+      horse: { select: { id: true, name: true, photoPath: true } },
       counterparty: { select: { name: true, email: true } },
     },
   })
@@ -88,6 +89,10 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
     // Eigen stallogo (#98) als data-URL; null = standaard Velaro-logo.
     stalLogoDataUrl: contract.stable.logoPath
       ? await getStableLogoDataUrl(contract.stable.id)
+      : null,
+    // Profielfoto van het paard (#118) als data-URL; null = geen foto in de PDF.
+    paardFotoDataUrl: contract.horse.photoPath
+      ? await getPaardFotoDataUrl(contract.horse.id)
       : null,
   }
 }

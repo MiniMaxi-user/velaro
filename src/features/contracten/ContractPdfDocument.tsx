@@ -118,10 +118,23 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 14,
     marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   partijenGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    flex: 1,
+  },
+  // Ronde profielfoto van het paard (#118), netjes uitgelijnd met afgewerkte rand.
+  paardFoto: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    objectFit: 'cover',
+    borderWidth: 2,
+    borderColor: COLORS.gold,
+    marginLeft: 14,
   },
   partijItem: {
     width: '50%',
@@ -241,7 +254,8 @@ export function ContractPdfDocument({ data }: { data: ContractPdfData }) {
           </View>
         </View>
 
-        {/* Partijenblok: stal, eigenaar en paard */}
+        {/* Partijenblok: stal, eigenaar en paard. Rechts (indien aanwezig) de
+            ronde profielfoto van het paard (#118); zonder foto geen lege plaats. */}
         <View style={styles.partijenBlok}>
           <View style={styles.partijenGrid}>
             <Veld label="Pensionstal" waarde={data.partijen.stalNaam} />
@@ -254,6 +268,10 @@ export function ContractPdfDocument({ data }: { data: ContractPdfData }) {
               <Veld label="Ingangsdatum" waarde={data.partijen.ingangsdatum} />
             )}
           </View>
+          {data.paardFotoDataUrl && (
+            // eslint-disable-next-line jsx-a11y/alt-text
+            <Image src={data.paardFotoDataUrl} style={styles.paardFoto} />
+          )}
         </View>
 
         {/* Artikelen/secties — uitsluitend voor aangezette/ingevulde optieblokken */}

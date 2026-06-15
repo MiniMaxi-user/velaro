@@ -1223,6 +1223,75 @@ a { color: inherit; text-decoration: none; }
   line-height: 1;
 }
 
+/* PAARDFOTO-AVATAR (#118) — ronde profielfoto met afgewerkte rand. Valt in lijsten
+   binnen .cell-avatar (32px) en wordt los gebruikt op detail (56px) en edit (96px). */
+.cell-avatar img.paard-foto-avatar,
+.paard-foto-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--velaro-radius-pill);
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+}
+
+.cell-avatar:has(.paard-foto-avatar) {
+  padding: 0;
+  background: transparent;
+  border: none;
+  overflow: hidden;
+}
+
+.paard-foto-avatar {
+  border: 1px solid var(--velaro-color-gold-bg-2);
+}
+
+.paard-foto-avatar--md { width: 56px; height: 56px; }
+.paard-foto-avatar--lg { width: 96px; height: 96px; }
+
+.paard-foto-avatar--placeholder {
+  background: var(--velaro-color-gold-bg);
+  border: 1px solid var(--velaro-color-gold-bg-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.paard-foto-avatar--md.paard-foto-avatar--placeholder { font-size: 28px; }
+.paard-foto-avatar--lg.paard-foto-avatar--placeholder { font-size: 48px; }
+
+/* Bijsnijd-overlay (modal) op het bewerk-scherm. */
+.paard-foto-crop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 43, 74, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.paard-foto-crop-dialog {
+  background: var(--velaro-color-surf-1);
+  border: 1px solid var(--velaro-color-border);
+  border-radius: var(--velaro-radius-lg);
+  box-shadow: var(--velaro-shadow-lg);
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.paard-foto-crop-area {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  background: var(--velaro-color-navy);
+  border-radius: var(--velaro-radius-md);
+  overflow: hidden;
+}
+
 .cell-entity-name {
   font-size: var(--velaro-text-sm);
   font-weight: 500;
