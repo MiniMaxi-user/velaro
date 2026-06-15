@@ -147,3 +147,75 @@ export async function deleteExternalAccount(
 
   revalidatePath('/stal/accounts')
 }
+
+/**
+ * Werkt naam en/of e-mail van een extern account (paardeneigenaar/bereider) bij.
+ * Autorisatie is identiek aan verwijderen: alleen een OWNER van een stal waaraan
+ * het account via een paard gekoppeld is, mag dit. Een gewijzigd e-mailadres wordt
+ * ook in Supabase Auth doorgevoerd (admin-client), analoog aan het verwijderpad.
+ *
+ * Wijzigt géén per-paard koppeling (dat blijft op het paardprofiel) en geen
+ * wachtwoord.
+ */
+export async function updateExternalAccount(
+  targetUserId: string,
+  input: { name: string; email: string },
+): Promise<{ error: string } | undefined> {
+  const ctx = await getOwnerStableIds()
+  if (!ctx.ok) return { error: ctx.error }
+
+  const name = input.name.trim()
+  const email = input.email.trim().toLowerCase()
+
+  if (!email) return { error: 'E-mailadres is verplicht' }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: 'Voer een geldig e-mailadres in' }
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, isPlatformAdmin: true, maxStables: true, email: true },
+  })
+  if (!target) return { error: 'Account niet gevonden' }
+
+  // Een platform-admin of staleigenaar-account (maxStables > 0) is geen extern
+  // account en hoort niet vanaf dit scherm bewerkt te worden.
+  if (target.isPlatformAdmin || target.maxStables > 0) {
+    return { error: 'Dit account kan niet vanaf dit scherm worden bewerkt' }
+  }
+
+  // Autorisatie: het account moet via minstens één paard aan een stal van deze
+  // OWNER gekoppeld zijn. Identiek aan het verwijderpad.
+  const linksInOwnerStables = await prisma.horsePerson.findMany({
+    where: {
+      userId: targetUserId,
+      horse: { stableId: { in: ctx.ownerStableIds } },
+    },
+    select: { id: true },
+  })
+  if (linksInOwnerStables.length === 0) {
+    return { error: 'Je hebt geen rechten om dit account te bewerken' }
+  }
+
+  const emailGewijzigd = email !== target.email.toLowerCase()
+
+  // E-mailwijziging eerst in Supabase Auth doorvoeren; lukt dat niet (bijv. al in
+  // gebruik), dan wijzigen we de DB-rij niet zodat beide bronnen consistent blijven.
+  if (emailGewijzigd) {
+    const adminClient = createAdminClient()
+    const { error: authError } = await adminClient.auth.admin.updateUserById(targetUserId, {
+      email,
+    })
+    if (authError) {
+      return { error: `Het e-mailadres kon niet worden gewijzigd: ${authError.message}` }
+    }
+  }
+
+  await prisma.user.update({
+    where: { id: targetUserId },
+    data: { name: name || null, email },
+  })
+
+  revalidatePath('/stal/accounts')
+  redirect('/stal/accounts')
+}

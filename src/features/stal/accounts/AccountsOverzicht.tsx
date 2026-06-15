@@ -72,19 +72,40 @@ function AccountRij({ account }: { account: StableExternalAccount }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {account.stables.map((s) => (
-              <span key={s.id} style={{ fontSize: 12 }}>{s.name}</span>
+              <span key={s.id} style={{ fontSize: 12 }}>
+                {/* Klik op de stalnaam activeert die stal (er is geen stal-detailpagina). */}
+                <Link href={`/stallen/${s.id}/openen`} className="form-link" title={`${s.name} openen`}>
+                  {s.name}
+                </Link>
+              </span>
             ))}
           </div>
         )}
       </td>
-      <td className="leden-tabel__acties">
-        <button
-          onClick={handleDelete}
-          disabled={isPending}
-          className="btn-danger btn-danger--sm"
-        >
-          {isPending ? '...' : 'Verwijderen'}
-        </button>
+      <td>
+        <div className="leden-tabel__acties">
+          <Link
+            href={`/stal/accounts/${account.userId}/bewerken`}
+            className="btn-icon"
+            title="Bewerken"
+            aria-label={`Account van ${account.name ?? account.email} bewerken`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+            </svg>
+          </Link>
+          <button
+            onClick={handleDelete}
+            disabled={isPending}
+            className="btn-icon btn-icon--danger"
+            title="Verwijderen"
+            aria-label={`Account van ${account.name ?? account.email} verwijderen`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ opacity: isPending ? 0.5 : 1 }}>
+              <path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.7 7h6.6L11 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
         {error && (
           <div className="rol-error" style={{ marginTop: 6, maxWidth: 280 }}>
             {error}

@@ -29,14 +29,25 @@ export type StableExternalAccount = {
  *
  * Alleen stallen waar de gebruiker OWNER is tellen mee — STAFF-only memberships
  * geven geen accountbeheer.
+ *
+ * Optioneel `activeStableId`: beperk het overzicht tot één actieve stal (mits de
+ * gebruiker daar OWNER is). Zonder filter (of bij "Alle stallen") tellen alle
+ * OWNER-stallen mee. Analoog aan het actieve-stal-patroon van /stal/leden.
  */
 export async function getStableExternalAccounts(
   ownerUserId: string,
+  activeStableId?: string | null,
 ): Promise<StableExternalAccount[]> {
   const memberships = await getMemberships(ownerUserId)
-  const ownerStableIds = memberships
+  let ownerStableIds = memberships
     .filter((m) => m.role === 'OWNER')
     .map((m) => m.stableId)
+
+  // Specifieke actieve stal: beperk tot die stal, maar alleen wanneer de gebruiker
+  // er daadwerkelijk OWNER is (anders valt de filter terug op een lege lijst).
+  if (activeStableId) {
+    ownerStableIds = ownerStableIds.filter((id) => id === activeStableId)
+  }
 
   if (ownerStableIds.length === 0) return []
 
@@ -99,4 +110,45 @@ export async function getStableExternalAccounts(
   return Array.from(byUser.values()).sort((a, b) =>
     (a.name ?? a.email).localeCompare(b.name ?? b.email, 'nl'),
   )
+}
+
+export type ExternalAccountForEdit = {
+  userId: string
+  name: string | null
+  email: string
+}
+
+/**
+ * Haalt één extern account op voor de bewerkpagina, maar uitsluitend wanneer de
+ * gegeven OWNER er rechten op heeft: het account moet via minstens één paard aan
+ * een stal van deze OWNER gekoppeld zijn (zelfde autorisatie als verwijderen/
+ * bewerken). Geeft `null` terug wanneer het account niet bestaat of buiten bereik
+ * van de OWNER valt.
+ */
+export async function getExternalAccountForEdit(
+  ownerUserId: string,
+  targetUserId: string,
+): Promise<ExternalAccountForEdit | null> {
+  const memberships = await getMemberships(ownerUserId)
+  const ownerStableIds = memberships
+    .filter((m) => m.role === 'OWNER')
+    .map((m) => m.stableId)
+
+  if (ownerStableIds.length === 0) return null
+
+  const link = await prisma.horsePerson.findFirst({
+    where: {
+      userId: targetUserId,
+      horse: { stableId: { in: ownerStableIds } },
+    },
+    select: {
+      user: { select: { id: true, name: true, email: true, isPlatformAdmin: true, maxStables: true } },
+    },
+  })
+
+  if (!link) return null
+  // Geen platform-admin of staleigenaar-account: dat is geen extern account.
+  if (link.user.isPlatformAdmin || link.user.maxStables > 0) return null
+
+  return { userId: link.user.id, name: link.user.name, email: link.user.email }
 }

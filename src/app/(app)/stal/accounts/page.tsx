@@ -2,8 +2,15 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
 import { getMemberships, isPlatformAdmin } from '@/lib/auth/authorization'
+import { getActiveStableId, ALLE_STALLEN } from '@/lib/active-stable'
+import { prisma } from '@/lib/prisma'
 import { getStableExternalAccounts } from '@/features/stal/accounts/queries'
 import AccountsOverzicht from '@/features/stal/accounts/AccountsOverzicht'
+
+const INFO_TEKST =
+  'Hier zie je alle externe accounts die als paardeneigenaar of bereider aan een ' +
+  'paard op jouw stal(len) gekoppeld zijn. Stalmedewerkers (eigenaren en ' +
+  'medewerkers) beheer je op het Team-scherm.'
 
 // Centraal accountbeheer voor de staleigenaar (OWNER): overzicht van alle externe
 // accounts (paardeneigenaren & bereiders) gekoppeld aan de paarden op zijn stal(len),
@@ -22,27 +29,51 @@ export default async function StalAccountsPage() {
   const isOwner = memberships.some((m) => m.role === 'OWNER')
   if (!isOwner) redirect('/stal')
 
-  const accounts = await getStableExternalAccounts(user.id)
+  // Beweeg mee met de actieve-stal-selectie (cookie), net als /stal/leden:
+  // een specifieke stal toont alleen die stal; ALLE_STALLEN toont alles.
+  const activeStableId = await getActiveStableId(user.id)
+  const alleStallen = activeStableId === ALLE_STALLEN
+
+  // Bepaal de stalfilter + titel. Bij een specifieke actieve stal waarvan de
+  // gebruiker OWNER is, filteren we daarop; anders tonen we alle OWNER-stallen.
+  const ownerStableIds = memberships.filter((m) => m.role === 'OWNER').map((m) => m.stableId)
+  const filterStableId =
+    !alleStallen && activeStableId && ownerStableIds.includes(activeStableId)
+      ? activeStableId
+      : null
+
+  let titelSuffix = 'Alle stallen'
+  if (filterStableId) {
+    const stable = await prisma.stable.findUnique({
+      where: { id: filterStableId },
+      select: { name: true },
+    })
+    titelSuffix = stable?.name ?? 'Alle stallen'
+  }
+
+  const accounts = await getStableExternalAccounts(user.id, filterStableId)
 
   return (
     <main className="page-container">
       <div className="page-header">
         <div>
           <div className="label">Stalbeheer</div>
-          <h1 className="page-title">
-            <em>Accounts</em> — paardeneigenaren &amp; bereiders
+          <h1 className="page-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            <span>
+              <em>Accounts</em> — {titelSuffix}
+            </span>
+            <span className="info-tip" tabIndex={0} role="note" aria-label={INFO_TEKST}>
+              <span className="info-tip__icon" aria-hidden="true">i</span>
+              <span className="info-tip__bubble" role="tooltip">
+                {INFO_TEKST}
+              </span>
+            </span>
           </h1>
         </div>
         <Link href="/stal" className="btn-ghost">
           ← Stal
         </Link>
       </div>
-
-      <p style={{ color: 'var(--velaro-color-muted)', marginTop: -8, marginBottom: 'var(--velaro-space-6)', maxWidth: 720 }}>
-        Hier zie je alle externe accounts die als paardeneigenaar of bereider aan een
-        paard op jouw stal(len) gekoppeld zijn. Stalmedewerkers (eigenaren en
-        medewerkers) beheer je op het Team-scherm.
-      </p>
 
       <div
         style={{

@@ -1335,12 +1335,23 @@ a { color: inherit; text-decoration: none; }
   border-bottom: 1px solid var(--velaro-color-border);
 }
 
+/* Grid-cellen rekken mee tot gelijke hoogte (align-items: stretch is de
+   grid-default). Zo kan een naast elkaar staand inputveld zijn control onderaan
+   uitlijnen, ook als het buurlabel langer is of afbreekt. (#117) */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 .form-grid--full { grid-column: 1 / -1; }
 
 .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .form-group:last-child { margin-bottom: 0; }
+
+/* Binnen een .form-grid duwt de control (input/select/textarea) naar de onderkant
+   van de cel, zodat naast elkaar staande velden met ongelijke labellengte toch op
+   gelijke hoogte uitlijnen — generiek, zonder per-scherm work-around. */
+.form-grid > .form-group { margin-bottom: 0; }
+.form-grid > .form-group > .input,
+.form-grid > .form-group > select.input,
+.form-grid > .form-group > textarea.input { margin-top: auto; }
 
 .form-label {
   font-size: 12px;
