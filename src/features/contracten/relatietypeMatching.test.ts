@@ -4,6 +4,8 @@ import type { HorseRelatietype } from '@prisma/client'
 import {
   matchContractVoorRelatietype,
   MATCH_INDICATIE,
+  bepaalContractPoort,
+  POORT_REDEN,
 } from './relatietypeMatching.ts'
 
 // Unit-tests voor de centrale contract-matching-bron (#105). Pure functie, geen
@@ -62,4 +64,99 @@ test('ontbrekend/leeg relatietype → neutraal', () => {
     assert.equal(m.voorselectie, null)
     assert.equal(m.indicatie, null)
   }
+})
+
+// ── Contract-poort: relatietype + stallingsvorm + eigenaar (#113) ─────────────
+
+test('pensionpaard + volledig pension + eigenaar → toegestaan, FULL_PENSION', () => {
+  const p = bepaalContractPoort({
+    relatietype: 'PENSIONPAARD',
+    stallingsvorm: 'VOLLEDIG_PENSION',
+    heeftEigenaar: true,
+  })
+  assert.equal(p.toegestaan, true)
+  assert.deepEqual(
+    p.toegestaan ? p.voorselectie : null,
+    { family: 'STALLING', type: 'FULL_PENSION' },
+  )
+})
+
+test('pensionpaard + halfpension + eigenaar → toegestaan, HALF_PENSION', () => {
+  const p = bepaalContractPoort({
+    relatietype: 'PENSIONPAARD',
+    stallingsvorm: 'HALFPENSION',
+    heeftEigenaar: true,
+  })
+  assert.equal(p.toegestaan, true)
+  assert.deepEqual(
+    p.toegestaan ? p.voorselectie : null,
+    { family: 'STALLING', type: 'HALF_PENSION' },
+  )
+})
+
+test('ontbrekend relatietype → dicht met "stel relatietype in"', () => {
+  const p = bepaalContractPoort({
+    relatietype: null,
+    stallingsvorm: 'VOLLEDIG_PENSION',
+    heeftEigenaar: true,
+  })
+  assert.equal(p.toegestaan, false)
+  assert.equal(p.toegestaan ? null : p.reden, POORT_REDEN.GEEN_RELATIETYPE)
+})
+
+test('ontbrekende stallingsvorm → dicht met "stel stallingsvorm in"', () => {
+  const p = bepaalContractPoort({
+    relatietype: 'PENSIONPAARD',
+    stallingsvorm: null,
+    heeftEigenaar: true,
+  })
+  assert.equal(p.toegestaan, false)
+  assert.equal(p.toegestaan ? null : p.reden, POORT_REDEN.GEEN_STALLINGSVORM)
+})
+
+test('niet-ondersteunde stallingsvorm (weidestalling) → dicht', () => {
+  for (const sv of ['WEIDESTALLING', 'PADDOCK', 'TIJDELIJK'] as const) {
+    const p = bepaalContractPoort({
+      relatietype: 'PENSIONPAARD',
+      stallingsvorm: sv,
+      heeftEigenaar: true,
+    })
+    assert.equal(p.toegestaan, false, `${sv} mag geen contract toelaten`)
+    assert.equal(
+      p.toegestaan ? null : p.reden,
+      POORT_REDEN.STALLINGSVORM_NIET_ONDERSTEUND,
+    )
+  }
+})
+
+test('niet-pension relatietype → dicht met relatietype-reden', () => {
+  // Lespaard kent een eigen indicatie; stalpaard valt op de generieke reden terug.
+  const les = bepaalContractPoort({
+    relatietype: 'LESPAARD',
+    stallingsvorm: 'VOLLEDIG_PENSION',
+    heeftEigenaar: true,
+  })
+  assert.equal(les.toegestaan, false)
+  assert.equal(les.toegestaan ? null : les.reden, MATCH_INDICATIE.LES)
+
+  const stal = bepaalContractPoort({
+    relatietype: 'STALPAARD',
+    stallingsvorm: 'VOLLEDIG_PENSION',
+    heeftEigenaar: true,
+  })
+  assert.equal(stal.toegestaan, false)
+  assert.equal(
+    stal.toegestaan ? null : stal.reden,
+    POORT_REDEN.RELATIETYPE_NIET_ONDERSTEUND,
+  )
+})
+
+test('geen eigenaar → dicht met "koppel eerst een eigenaar"', () => {
+  const p = bepaalContractPoort({
+    relatietype: 'PENSIONPAARD',
+    stallingsvorm: 'VOLLEDIG_PENSION',
+    heeftEigenaar: false,
+  })
+  assert.equal(p.toegestaan, false)
+  assert.equal(p.toegestaan ? null : p.reden, POORT_REDEN.GEEN_EIGENAAR)
 })

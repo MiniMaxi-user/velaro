@@ -5,7 +5,7 @@ import { getHorse } from '@/features/paarden/queries'
 import { getStableRole } from '@/lib/auth/authorization'
 import ContractForm from '@/features/contracten/ContractForm'
 import { createStallingContract } from '@/features/contracten/actions'
-import { matchContractVoorRelatietype } from '@/features/contracten/relatietypeMatching'
+import { bepaalContractPoort } from '@/features/contracten/relatietypeMatching'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -23,10 +23,17 @@ export default async function NieuwContractPage({ params }: Props) {
   const role = await getStableRole(user.id, horse.stableId)
   if (!role) notFound()
 
-  // Zonder gekoppelde eigenaar is er geen wederpartij te kiezen — terug naar de tab,
-  // waar de knop de melding "Koppel eerst een eigenaar" toont.
   const eigenaren = horse.people.filter((p) => p.isOwner)
-  if (eigenaren.length === 0) {
+
+  // Poort (#113): relatietype + stallingsvorm + eigenaar zijn harde voorwaarden. Is
+  // de poort dicht (bv. ontbrekende stallingsvorm of een niet-pension relatietype),
+  // dan is er niets aan te maken — terug naar de tab, waar de knop de reden toont.
+  const poort = bepaalContractPoort({
+    relatietype: horse.relatietype,
+    stallingsvorm: horse.stallingsvorm,
+    heeftEigenaar: eigenaren.length > 0,
+  })
+  if (!poort.toegestaan) {
     redirect(`/paarden/${id}?tab=contracten`)
   }
 
@@ -36,11 +43,6 @@ export default async function NieuwContractPage({ params }: Props) {
   }))
 
   const action = createStallingContract.bind(null, id)
-
-  // Contract-matching op basis van het relatietype (#105): pensionpaard levert een
-  // overschrijfbare STALLING/FULL_PENSION-voorselectie; andere relatietypes leveren
-  // hooguit een informatieve indicatie.
-  const match = matchContractVoorRelatietype(horse.relatietype)
 
   return (
     <main className="page-container">
@@ -57,8 +59,7 @@ export default async function NieuwContractPage({ params }: Props) {
         horseId={id}
         action={action}
         owners={owners}
-        typeVoorselectie={match.voorselectie ?? undefined}
-        relatietypeIndicatie={match.indicatie ?? undefined}
+        typeVoorselectie={poort.voorselectie}
       />
     </main>
   )

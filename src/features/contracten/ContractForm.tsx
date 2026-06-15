@@ -69,7 +69,6 @@ export default function ContractForm({
   bijlagenConfig,
   extraDiensten,
   typeVoorselectie,
-  relatietypeIndicatie,
   submitLabel = 'Concept aanmaken',
 }: {
   horseId: string
@@ -77,12 +76,10 @@ export default function ContractForm({
   owners: OwnerOption[]
   defaultCounterpartyUserId?: string
   defaultStartDate?: string
-  // Overschrijfbare voorselectie van het contracttype op basis van het relatietype
-  // van het paard (#105). Standaard STALLING/FULL_PENSION bij een pensionpaard.
+  // Bepaald contracttype op basis van relatietype + stallingsvorm van het paard
+  // (#113). Stalling/FULL_PENSION bij volledig pension, Stalling/HALF_PENSION bij
+  // halfpension. Het type-veld is read-only; de stallingsvorm stuurt het.
   typeVoorselectie?: ContractVoorselectie
-  // Informatieve indicatie wanneer het relatietype geen (bouwbare) voorselectie
-  // oplevert (#105), bijv. lease/lespaard/opdracht. Puur informatief.
-  relatietypeIndicatie?: string
   // Wanneer meegegeven, toont het formulier de sectie "Huisvesting & verzorging".
   // Op het bewerkscherm vullen we boxNumber voor uit het paardprofiel (overschrijfbaar).
   huisvesting?: HuisvestingConfig
@@ -187,15 +184,9 @@ export default function ContractForm({
             readOnly
             disabled
           />
-          {typeVoorselectie && (
-            <span className="form-hint">
-              Voorgeselecteerd op basis van het relatietype van het paard. Je kunt dit
-              wijzigen.
-            </span>
-          )}
-          {relatietypeIndicatie && (
-            <span className="form-hint">{relatietypeIndicatie}</span>
-          )}
+          <span className="form-hint">
+            Bepaald door het relatietype en de stallingsvorm van het paard.
+          </span>
         </div>
 
         <div className="form-group">

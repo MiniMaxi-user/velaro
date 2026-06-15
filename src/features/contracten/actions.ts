@@ -79,6 +79,7 @@ import {
   renderContractPdfBuffer,
 } from './pdf'
 import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
+import { bepaalContractPoort } from './relatietypeMatching'
 import type { ContractStatus, Prisma } from '@prisma/client'
 
 // Leest de huisvesting-opties (STAL-03) uit het formulier. Onbekende boxtypes
@@ -411,8 +412,11 @@ async function getAuthorizedStaff(horseId: string) {
   return { user, horse, role }
 }
 
-// Maakt een concept-stallingscontract (full pension) aan op een paard.
-// family=STALLING, type=FULL_PENSION, status=CONCEPT, currentVersion=1.
+// Maakt een concept-stallingscontract aan op een paard. family=STALLING,
+// status=CONCEPT, currentVersion=1. Het type volgt de stallingsvorm van het paard
+// (#113): volledig pension → FULL_PENSION, halfpension → HALF_PENSION. De poort
+// (relatietype + stallingsvorm + eigenaar) wordt hier server-side afgedwongen, zodat
+// een directe aanroep zonder geldige combinatie wordt geweigerd.
 export async function createStallingContract(horseId: string, formData: FormData) {
   const { horse } = await getAuthorizedStaff(horseId)
 
@@ -431,12 +435,23 @@ export async function createStallingContract(horseId: string, formData: FormData
     throw new Error('De gekozen wederpartij is geen eigenaar van dit paard.')
   }
 
+  // Poort (#113): relatietype + stallingsvorm bepalen of én welk contract er mag
+  // worden gemaakt. De eigenaar-eis is hierboven al geborgd (wederpartij = eigenaar).
+  const poort = bepaalContractPoort({
+    relatietype: horse.relatietype,
+    stallingsvorm: horse.stallingsvorm,
+    heeftEigenaar: true,
+  })
+  if (!poort.toegestaan) {
+    throw new Error(poort.reden)
+  }
+
   await prisma.contract.create({
     data: {
       horseId,
       stableId: horse.stableId,
-      family: 'STALLING',
-      type: 'FULL_PENSION',
+      family: poort.voorselectie.family,
+      type: poort.voorselectie.type,
       status: 'CONCEPT',
       currentVersion: 1,
       counterpartyUserId,

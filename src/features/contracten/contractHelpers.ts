@@ -46,9 +46,11 @@ export const CONTRACT_FAMILY_LABELS: Record<ContractFamily, string> = {
   LEASE: 'Lease',
 }
 
-// Type-labels. v1 kent alleen FULL_PENSION binnen de stalling-familie.
+// Type-labels binnen de stalling-familie. Het contracttype volgt de stallingsvorm
+// van het paard (#113): volledig pension → FULL_PENSION, halfpension → HALF_PENSION.
 export const CONTRACT_TYPE_LABELS: Record<string, string> = {
   FULL_PENSION: 'Full pension',
+  HALF_PENSION: 'Half pension',
 }
 
 export function contractTypeLabel(type: string): string {

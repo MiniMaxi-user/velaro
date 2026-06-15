@@ -1,29 +1,39 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import type { ContractPoort } from './relatietypeMatching'
 
-// Knop "Nieuw stallingscontract". Wanneer er nog geen eigenaar aan het paard is
-// gekoppeld, wordt een melding getoond ("Koppel eerst een eigenaar") en stopt het
-// proces. Anders navigeert de knop naar de aanmaak-route.
+// Knop "Nieuw stallingscontract". De poort (#113) bepaalt of de knop bruikbaar is:
+// een contract kan pas worden aangemaakt wanneer relatietype = pensionpaard,
+// stallingsvorm ∈ {volledig pension, halfpension} én er een eigenaar gekoppeld is.
+// Is de poort dicht, dan is de knop uitgeschakeld met een toelichting eronder zodat
+// de gebruiker weet wat er nog ontbreekt.
 export default function NieuwContractKnop({
   horseId,
-  hasOwners,
+  poort,
 }: {
   horseId: string
-  hasOwners: boolean
+  poort: ContractPoort
 }) {
   const router = useRouter()
 
-  function handleClick() {
-    if (!hasOwners) {
-      alert('Koppel eerst een eigenaar')
-      return
-    }
-    router.push(`/paarden/${horseId}/contracten/nieuw`)
+  if (!poort.toegestaan) {
+    return (
+      <div className="nieuw-contract-poort">
+        <button type="button" className="btn-primary" disabled title={poort.reden}>
+          Nieuw stallingscontract
+        </button>
+        <span className="form-hint">{poort.reden}</span>
+      </div>
+    )
   }
 
   return (
-    <button type="button" className="btn-primary" onClick={handleClick}>
+    <button
+      type="button"
+      className="btn-primary"
+      onClick={() => router.push(`/paarden/${horseId}/contracten/nieuw`)}
+    >
       Nieuw stallingscontract
     </button>
   )

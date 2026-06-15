@@ -27,6 +27,7 @@ import {
   verwerkTijdgebondenOvergangen,
 } from '@/features/contracten/actions'
 import ContractenPanel from '@/features/contracten/ContractenPanel'
+import { bepaalContractPoort } from '@/features/contracten/relatietypeMatching'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -247,11 +248,20 @@ export default async function PaardDetailPage({ params }: Props) {
 
         const heeftEigenaar = horse.people.some((p) => p.isOwner)
 
+        // Poort (#113): een stallingscontract kan pas worden aangemaakt wanneer
+        // relatietype = pensionpaard, stallingsvorm ∈ {volledig pension, halfpension}
+        // én er een eigenaar gekoppeld is. De stallingsvorm bepaalt het contracttype.
+        const contractPoort = bepaalContractPoort({
+          relatietype: horse.relatietype,
+          stallingsvorm: horse.stallingsvorm,
+          heeftEigenaar,
+        })
+
         const contractenPanel = (
           <ContractenPanel
             horseId={id}
             contracts={contracten}
-            hasOwners={heeftEigenaar}
+            poort={contractPoort}
             naleving={naleving}
           />
         )
