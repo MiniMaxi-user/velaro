@@ -3,7 +3,8 @@ import { notFound, redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
 import { getHorse, getFeedingPlan, getStableMembersForHorse } from '@/features/paarden/queries'
 import { getStableRole, canViewHorse } from '@/lib/auth/authorization'
-import { GESLACHT_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
+import { GESLACHT_LABELS, RELATIETYPE_LABELS, STALLINGSVORM_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
+import { RelatietypeBadge, StallingsvormBadge } from '@/features/paarden/RelatieBadges'
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
 import PersonenBeheer from '@/features/paarden/PersonenBeheer'
 import PersonenInfo from '@/features/paarden/PersonenInfo'
@@ -15,7 +16,6 @@ import BerichtenPanel from '@/features/berichten/BerichtenPanel'
 import StalGegevensPanel from '@/features/paarden/StalGegevensPanel'
 import VoederschemaPanel from '@/features/paarden/VoederschemaPanel'
 import PaardDetailTabs from '@/features/paarden/PaardDetailTabs'
-import EigendomBadge from '@/features/paarden/EigendomBadge'
 import {
   getContractsForHorse,
   getGezondheidsplichtNaleving,
@@ -136,7 +136,8 @@ export default async function PaardDetailPage({ params }: Props) {
           <Link href="/paarden" className="detail-back">← Terug naar paarden</Link>
           <h1 className="detail-title">{horse.name}</h1>
           <div className="detail-meta">
-            <EigendomBadge ownedByStable={horse.relatietype === 'STALPAARD'} />
+            <RelatietypeBadge relatietype={horse.relatietype} />
+            <StallingsvormBadge stallingsvorm={horse.stallingsvorm} />
             {horse.breed && <span className="badge badge-navy">{horse.breed}</span>}
             {leeftijd !== null && <span className="badge badge-neutral">{leeftijd} jaar</span>}
             {horse.sex && <span className="badge badge-neutral">{GESLACHT_LABELS[horse.sex]}</span>}
@@ -164,6 +165,8 @@ export default async function PaardDetailPage({ params }: Props) {
                 <Veld label="Kleur" waarde={horse.color} />
                 <Veld label="Geslacht" waarde={horse.sex ? GESLACHT_LABELS[horse.sex] : null} />
                 <Veld label="Stalplek / Box" waarde={horse.boxNumber} />
+                <Veld label="Relatietype" waarde={horse.relatietype ? RELATIETYPE_LABELS[horse.relatietype] : null} />
+                <Veld label="Stallingsvorm" waarde={horse.stallingsvorm ? STALLINGSVORM_LABELS[horse.stallingsvorm] : null} />
                 <Veld label="Discipline" waarde={horse.discipline} />
                 {horse.disciplineLevel && <Veld label="Niveau" waarde={horse.disciplineLevel} />}
                 <Veld label="Vader" waarde={horse.sireName} />
