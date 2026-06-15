@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
-import { getHorse, getFeedingPlan } from '@/features/paarden/queries'
+import { getHorse, getFeedingPlan, getStableMembersForHorse } from '@/features/paarden/queries'
 import { getStableRole, canViewHorse } from '@/lib/auth/authorization'
 import { GESLACHT_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
@@ -61,6 +61,8 @@ export default async function PaardDetailPage({ params }: Props) {
     getFeedingPlan(id),
     getContractsForHorse(id),
   ])
+
+  const stalleden = role ? await getStableMembersForHorse(id) : []
 
   if (!canView) notFound()
 
@@ -259,11 +261,8 @@ export default async function PaardDetailPage({ params }: Props) {
                 gezondheid={gezondheidPanel}
                 eigenaren={
                   <div className="panel">
-                    <div className="panel-header">
-                      <span className="panel-title">Eigenaren &amp; bereiders</span>
-                    </div>
                     <div className="panel-body">
-                      <PersonenBeheer horseId={id} people={horse.people} />
+                      <PersonenBeheer horseId={id} people={horse.people} members={stalleden} />
                     </div>
                   </div>
                 }

@@ -26,6 +26,29 @@ export async function getFeedingPlan(horseId: string) {
   return prisma.feedingPlan.findUnique({ where: { horseId } })
 }
 
+/**
+ * Levert de stalleden (StableMember: OWNER/STAFF) van de stal waartoe het gegeven
+ * paard behoort. Bron voor de zoek-dropdown bij het koppelen van personen aan een
+ * paard op de tab "Eigenaar & bereider".
+ */
+export async function getStableMembersForHorse(horseId: string) {
+  const horse = await prisma.horse.findUnique({
+    where: { id: horseId },
+    select: { stableId: true },
+  })
+  if (!horse) return []
+
+  const members = await prisma.stableMember.findMany({
+    where: { stableId: horse.stableId },
+    select: {
+      user: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { user: { name: 'asc' } },
+  })
+
+  return members.map((m) => m.user)
+}
+
 export async function getHorse(id: string) {
   return prisma.horse.findUnique({
     where: { id },
