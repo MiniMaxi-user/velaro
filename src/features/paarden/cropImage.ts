@@ -15,8 +15,11 @@ function laadAfbeelding(src: string): Promise<HTMLImageElement> {
   })
 }
 
-// Maximale uitvoerafmeting: houdt het bestand klein en de avatar scherp genoeg.
-const MAX_OUTPUT = 800
+// Maximale uitvoerafmeting (#124): de foto wordt opgeslagen op max 250px breed.
+// Dat is ruim voldoende voor de grootste weergave (96px op het detailscherm) en de
+// contract-PDF, houdt het bestand klein en voorkomt dat de geüploade afbeelding de
+// server-action-limiet overschrijdt. Lijsten tonen er een kleine thumbnail van (32px).
+const MAX_OUTPUT = 250
 
 // Snijdt `imageSrc` (een object-URL of data-URL) tot het opgegeven vierkante gebied
 // en geeft een vierkante PNG-Blob terug.
