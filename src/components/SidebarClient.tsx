@@ -10,6 +10,7 @@ import { ALLE_STALLEN } from '@/lib/stable-constants'
 const EIGENAAR_NAV = [
   { href: '/eigenaar', label: 'Dashboard',    icon: 'dashboard', exact: true },
   { href: '/paarden',  label: 'Mijn paarden', icon: 'horse',     exact: false },
+  { href: '/lease',    label: 'Marktplaats',  icon: 'lease',     exact: false },
 ]
 
 const ADMIN_NAV = [
@@ -32,6 +33,13 @@ function NavIcon({ name }: { name: string }) {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M2 13c0-3 2-5 4-5h4c2 0 4 2 4 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
       <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+    </svg>
+  )
+  if (name === 'lease') return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M2 6.5 8 2l6 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M3.5 7v6h9V7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M6.5 13v-3h3v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
   if (name === 'check') return (
@@ -114,6 +122,7 @@ export default function SidebarClient({
         ? [{ href: '/stallen', label: 'Mijn stallen', icon: 'stallen', exact: false }]
         : []),
       { href: '/paarden',    label: 'Paarden',      icon: 'horse',     exact: false },
+      { href: '/lease',      label: 'Lease',         icon: 'lease',     exact: false },
       { href: '/stal/contracten', label: 'Contracten', icon: 'contract', exact: false },
       { href: '/stal/leden', label: 'Team',          icon: 'team',      exact: false },
       // Externe accounts (paardeneigenaren & bereiders): alleen voor de OWNER (#114).
