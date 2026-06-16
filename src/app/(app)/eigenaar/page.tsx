@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
-import { getHorsesForOwner, getFeedingPlan } from '@/features/paarden/queries'
+import { getHorsesForOwner, getFeedingPlan, getLeasedHorsesForUser } from '@/features/paarden/queries'
+import { leaseTypeLabel } from '@/features/lease/leaseHelpers'
 import { getMessagesForHorseView, getUnreadCountForHorseView } from '@/features/berichten/queries'
 import BerichtItem from '@/features/berichten/BerichtItem'
 import { getZorgActiesVoorPaard } from '@/features/gezondheid/queries'
@@ -29,7 +30,11 @@ export default async function EigenaarPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
 
-  const horses = await getHorsesForOwner(user.id)
+  const [horses, leasedHorses] = await Promise.all([
+    getHorsesForOwner(user.id),
+    getLeasedHorsesForUser(user.id),
+  ])
+  const heeftPaarden = horses.length > 0 || leasedHorses.length > 0
 
   // Laad berichten (stal + paard), ongelezen-tellers, zorgacties, voederschema en
   // het eventueel aangeboden stallingscontract per paard parallel.
@@ -84,7 +89,7 @@ export default async function EigenaarPage() {
         </div>
       </div>
 
-      {horses.length === 0 ? (
+      {!heeftPaarden ? (
         <div className="empty-state">
           <div className="empty-state__title">Geen paarden gevonden</div>
           <p style={{ color: 'var(--velaro-color-muted)', marginTop: 8 }}>
@@ -93,6 +98,8 @@ export default async function EigenaarPage() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {horses.length > 0 && (
+          <>
           {/* Contract-overzicht (STAL-13, #86): alle stallingscontracten waarvan deze
               eigenaar de wederpartij is. Server-side gefilterd op counterpartyUserId,
               dus uitsluitend contracten van de eigen paard(en). */}
@@ -329,6 +336,46 @@ export default async function EigenaarPage() {
               </div>
             )
           })}
+          </>
+          )}
+
+          {/* Geleasede paarden (lease-module #59, Lease 02): read-only weergave naast
+              de eigen paarden, met een gouden Lease-badge. Een subkop "In lease"
+              alleen wanneer de gebruiker zowel eigen als geleasede paarden heeft. */}
+          {leasedHorses.length > 0 && (
+            <>
+              {horses.length > 0 && (
+                <div className="label" style={{ marginTop: 8 }}>In lease</div>
+              )}
+              {leasedHorses.map(({ horse, leaseType }) => {
+                const leeftijd = horse.dateOfBirth
+                  ? berekenLeeftijd(new Date(horse.dateOfBirth))
+                  : null
+                return (
+                  <div key={horse.id} className="panel">
+                    <div className="panel-header">
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="panel-title">{horse.name}</span>
+                          <span className="badge badge-gold">
+                            In lease — {leaseTypeLabel(leaseType)}
+                          </span>
+                        </div>
+                        <div className="detail-meta" style={{ marginTop: 6 }}>
+                          {horse.breed && <span className="badge badge-navy">{horse.breed}</span>}
+                          {leeftijd !== null && <span className="badge badge-neutral">{leeftijd} jaar</span>}
+                          {horse.discipline && <span className="badge badge-gold">{horse.discipline}</span>}
+                        </div>
+                      </div>
+                      <Link href={`/paarden/${horse.id}`} className="btn-ghost btn-ghost--sm">
+                        Bekijk profiel
+                      </Link>
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
       )}
     </>

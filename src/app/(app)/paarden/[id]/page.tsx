@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
 import { getHorse, getFeedingPlan, getStableMembersForHorse } from '@/features/paarden/queries'
-import { getStableRole, canViewHorse } from '@/lib/auth/authorization'
+import { getStableRole, canViewHorse, getLeaseForHorse } from '@/lib/auth/authorization'
+import { leaseTypeLabel } from '@/features/lease/leaseHelpers'
 import { GESLACHT_LABELS, RELATIETYPE_LABELS, STALLINGSVORM_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
 import { RelatietypeBadge, StallingsvormBadge } from '@/features/paarden/RelatieBadges'
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
@@ -52,7 +53,7 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel, fotoUrl] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel, fotoUrl, lease] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
@@ -64,6 +65,7 @@ export default async function PaardDetailPage({ params }: Props) {
     getFeedingPlan(id),
     getContractsForHorse(id),
     getPaardFotoSignedUrl(id),
+    getLeaseForHorse(user.id, id),
   ])
 
   const stalleden = role ? await getStableMembersForHorse(id) : []
@@ -95,6 +97,12 @@ export default async function PaardDetailPage({ params }: Props) {
 
   const canEdit = role !== null
   const canDelete = role === 'OWNER'
+
+  // Pure leaser (lease-module #59, Lease 02): heeft een actieve lease maar is geen
+  // stallid en niet als eigenaar/bereider gekoppeld. Krijgt de read-only weergave
+  // zonder het Eigenaren-paneel.
+  const isPerson = horse.people.some((p) => p.user.id === user.id)
+  const isPureLeaser = !canEdit && !isPerson && lease !== null
 
   // Entings- & gezondheidsplicht-naleving (STAL-07): per contract de afgesproken
   // plicht afzetten tegen de echte gezondheidsregistratie van het paard.
@@ -157,6 +165,7 @@ export default async function PaardDetailPage({ params }: Props) {
             {leeftijd !== null && <span className="badge badge-neutral">{leeftijd} jaar</span>}
             {horse.sex && <span className="badge badge-neutral">{GESLACHT_LABELS[horse.sex]}</span>}
             {horse.discipline && <span className="badge badge-gold">{horse.discipline}{horse.disciplineLevel ? ` ${horse.disciplineLevel}` : ''}</span>}
+            {lease && <span className="badge badge-gold">In lease — {leaseTypeLabel(lease.leaseType)}</span>}
           </div>
         </div>
       </div>
@@ -316,7 +325,7 @@ export default async function PaardDetailPage({ params }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {algemeenPanel}
               {identificatiePanel}
-              <PersonenInfo people={horse.people} />
+              {!isPureLeaser && <PersonenInfo people={horse.people} />}
               {voederschemaPanel}
               {gezondheidPanel}
               {berichtenPanel}

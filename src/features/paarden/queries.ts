@@ -11,6 +11,18 @@ export async function getHorsesForOwner(userId: string) {
   return links.map((l) => l.horse)
 }
 
+// Paarden die de gebruiker least via een ACTIEVE Lease (lease-module #59, Lease 02).
+// Voor het leaser-dashboard: een leesweergave naast de eigen paarden, onderscheiden
+// met een Lease-badge. Geeft per paard ook het leasetype terug voor die badge.
+export async function getLeasedHorsesForUser(userId: string) {
+  const leases = await prisma.lease.findMany({
+    where: { leaserUserId: userId, status: 'ACTIEF' },
+    include: { horse: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  return leases.map((l) => ({ horse: l.horse, leaseType: l.leaseType }))
+}
+
 export async function getUserStable(userId: string) {
   return getActiveStable(userId)
 }

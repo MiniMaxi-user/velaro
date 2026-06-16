@@ -76,6 +76,28 @@ export async function isHorseOwner(
   return person?.isOwner === true
 }
 
+/**
+ * Geeft de actieve lease van deze gebruiker op dit paard terug (of null). Een
+ * lease met status ACTIEF maakt de gebruiker leaser, met leestoegang tot het
+ * paardprofiel — vergelijkbaar met de paardeneigenaar-weergave (lease-module #59,
+ * Lease 02). CONCEPT/OPGEZEGD/BEEINDIGD geven géén toegang.
+ */
+export async function getLeaseForHorse(userId: string, horseId: string) {
+  return prisma.lease.findFirst({
+    where: { horseId, leaserUserId: userId, status: 'ACTIEF' },
+    orderBy: { startDate: 'desc' },
+  })
+}
+
+/** Heeft deze gebruiker een actieve lease op dit paard? */
+export async function isHorseLeaser(
+  userId: string,
+  horseId: string
+): Promise<boolean> {
+  const lease = await getLeaseForHorse(userId, horseId)
+  return lease !== null
+}
+
 export async function canViewHorse(
   userId: string,
   horseId: string
@@ -86,13 +108,14 @@ export async function canViewHorse(
   })
   if (!horse) return false
 
-  const [member, person] = await Promise.all([
+  const [member, person, lease] = await Promise.all([
     isStableMember(userId, horse.stableId),
     prisma.horsePerson.findUnique({
       where: { horseId_userId: { horseId, userId } },
     }),
+    getLeaseForHorse(userId, horseId),
   ])
 
-  // Stallid, óf gekoppeld als eigenaar/bereider (minstens één rol actief).
-  return member || person !== null
+  // Stallid, gekoppeld als eigenaar/bereider, óf actieve leaser.
+  return member || person !== null || lease !== null
 }
