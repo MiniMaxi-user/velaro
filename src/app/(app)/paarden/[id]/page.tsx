@@ -4,6 +4,8 @@ import { getAuthUser } from '@/lib/auth/session'
 import { getHorse, getFeedingPlan, getStableMembersForHorse } from '@/features/paarden/queries'
 import { getStableRole, canViewHorse, getLeaseForHorse } from '@/lib/auth/authorization'
 import { leaseTypeLabel } from '@/features/lease/leaseHelpers'
+import { getLeaseListingForHorse } from '@/features/lease/listingQueries'
+import LeaseListingPanel, { type LeaseListingView } from '@/features/lease/LeaseListingPanel'
 import { GESLACHT_LABELS, RELATIETYPE_LABELS, STALLINGSVORM_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
 import { RelatietypeBadge, StallingsvormBadge } from '@/features/paarden/RelatieBadges'
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
@@ -53,7 +55,7 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel, fotoUrl, lease] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel, fotoUrl, lease, leaseListing] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
@@ -66,6 +68,7 @@ export default async function PaardDetailPage({ params }: Props) {
     getContractsForHorse(id),
     getPaardFotoSignedUrl(id),
     getLeaseForHorse(user.id, id),
+    getLeaseListingForHorse(id),
   ])
 
   const stalleden = role ? await getStableMembersForHorse(id) : []
@@ -289,6 +292,24 @@ export default async function PaardDetailPage({ params }: Props) {
           />
         )
 
+        // Lease-aanbod (Lease 03, #62): beheer van het marktplaats-aanbod, alleen
+        // voor stalleden (deze tab wordt enkel in de canEdit-weergave getoond).
+        const leaseView: LeaseListingView | null = leaseListing
+          ? {
+              id: leaseListing.id,
+              leaseType: leaseListing.leaseType,
+              daysPerWeek: leaseListing.daysPerWeek,
+              pricePerMonth: leaseListing.pricePerMonth ? Number(leaseListing.pricePerMonth) : null,
+              region: leaseListing.region,
+              discipline: leaseListing.discipline,
+              movable: leaseListing.movable,
+              exclusive: leaseListing.exclusive,
+              description: leaseListing.description,
+              isActive: leaseListing.isActive,
+            }
+          : null
+        const leasePanel = <LeaseListingPanel horseId={id} listing={leaseView} />
+
         // Stalleden (OWNER/STAFF): tab-layout met vaste contextkolom rechts.
         if (canEdit) {
           return (
@@ -307,6 +328,7 @@ export default async function PaardDetailPage({ params }: Props) {
                 voederschema={voederschemaPanel}
                 berichten={berichtenPanel}
                 contracten={contractenPanel}
+                lease={leasePanel}
               />
 
               {/* Rechterkolom (30%) — altijd zichtbaar */}
