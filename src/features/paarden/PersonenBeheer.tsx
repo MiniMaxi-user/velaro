@@ -273,13 +273,21 @@ export default function PersonenBeheer({ horseId, people, members }: {
                 onChange={handleQueryChange}
                 onKeyDown={handleKeyDown}
                 onFocus={() => { if (query.trim().length >= 2) setIsOpen(true) }}
+                // Zoekveld, geen login: wachtwoordmanagers (LastPass/1Password) en
+                // browser-autofill onderdrukken zodat hun pop-up niet verschijnt (#123).
                 autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore
+                data-form-type="other"
+                name="stallid-zoeken"
+                role="combobox"
                 aria-label="Zoek stallid"
+                aria-controls="stallid-zoek-resultaten"
                 aria-expanded={isOpen}
                 aria-autocomplete="list"
               />
               {isOpen && (
-                <div className="topbar-zoek-dropdown" role="listbox" aria-label="Zoekresultaten" style={{ minWidth: '100%' }}>
+                <div id="stallid-zoek-resultaten" className="topbar-zoek-dropdown" role="listbox" aria-label="Zoekresultaten" style={{ minWidth: '100%' }}>
                   {resultaten.length === 0 ? (
                     <div className="topbar-zoek-leeg">Geen stalleden gevonden</div>
                   ) : (
