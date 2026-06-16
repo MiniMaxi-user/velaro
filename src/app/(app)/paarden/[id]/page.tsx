@@ -135,6 +135,9 @@ export default async function PaardDetailPage({ params }: Props) {
           </div>
         </div>
         <div className="page-header-actions">
+          <Link href={`/paarden/${id}/beschikbaarheid`} className="btn-ghost">
+            Beschikbaarheid
+          </Link>
           {canEdit && (
             <Link href={`/paarden/${id}/bewerken`} className="btn-secondary">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

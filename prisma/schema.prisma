@@ -45,6 +45,9 @@ model User {
   leaseInquiries        LeaseInquiry[]        @relation("LeaseInquirer")
   leaseInquiryMessages  LeaseInquiryMessage[]
 
+  // Geclaimde dagdelen in de beschikbaarheidskalender (Lease 09, #68).
+  dagdeelClaims         LeaseDagdeelClaim[]
+
   // Zakelijke / facturatiegegevens staan in een apart, 1-1 gekoppeld profiel
   // (alleen relevant voor staleigenaar-accounts). Optioneel: niet elk account
   // heeft een profielrij.
@@ -210,6 +213,8 @@ model Horse {
   // overeenkomsten hangen aan het centrale paardprofiel.
   leaseListings   LeaseListing[]
   leases          Lease[]
+  // Geclaimde dagdelen in de beschikbaarheidskalender (Lease 09, #68).
+  dagdeelClaims   LeaseDagdeelClaim[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -711,4 +716,25 @@ model LeaseInquiryMessage {
   createdAt DateTime @default(now())
 
   @@index([inquiryId])
+}
+
+// ── Beschikbaarheidskalender (Lease 09, #68) ─────────────────────────────────
+// Eén claim = één persoon die een dagdeel van een paard claimt op een concrete dag.
+// Bij (deel)lease voorkomt dit dat meerdere partijen tegelijk willen rijden. De
+// unieke sleutel (paard + datum + dagdeel) borgt conflictpreventie op databaseniveau.
+model LeaseDagdeelClaim {
+  id      String @id @default(uuid()) @db.Uuid
+  horseId String @db.Uuid
+  horse   Horse  @relation(fields: [horseId], references: [id], onDelete: Cascade)
+  userId  String @db.Uuid
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  datum   DateTime @db.Date
+  dagdeel String // OCHTEND | MIDDAG | AVOND
+
+  createdAt DateTime @default(now())
+
+  @@unique([horseId, datum, dagdeel])
+  @@index([horseId])
+  @@index([userId])
 }
