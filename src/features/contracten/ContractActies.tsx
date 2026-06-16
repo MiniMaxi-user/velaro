@@ -57,6 +57,15 @@ export default function ContractActies({
   const compleet = ontbrekendeVelden.length === 0 && heeftWederpartij
   const aanbiedenDisabled = pending || !compleet
 
+  // Compacte reden-omschrijving voor de "Incompleet"-badge (#122): de details
+  // verhuizen naar de tooltip i.p.v. een lange validatietekst in de kolom.
+  const onvolledigRedenen: string[] = []
+  if (!heeftWederpartij) onvolledigRedenen.push('Kies eerst een wederpartij (paardeigenaar)')
+  for (const blok of ontbrekendeVelden) {
+    onvolledigRedenen.push(`${blok.blok}: ${blok.velden.join(', ')}`)
+  }
+  const onvolledigTitel = `Nog niet compleet — ${onvolledigRedenen.join('; ')}.`
+
   // Opent een PDF-buffer (base64) in een nieuw tabblad via een object-URL. Gebruikt
   // voor de in-memory preview (STAL-12), die niet in Supabase Storage wordt opgeslagen.
   function openBase64Pdf(base64: string) {
@@ -245,18 +254,14 @@ export default function ContractActies({
         {pending ? 'Bezig…' : 'Verwijderen'}
       </button>
       {!compleet && (
-        <div className="form-hint">
-          {!heeftWederpartij && <div>Kies eerst een wederpartij (paardeigenaar).</div>}
-          {ontbrekendeVelden.length > 0 && (
-            <div>
-              Nog niet compleet — vul aan:{' '}
-              {ontbrekendeVelden
-                .map((b) => `${b.blok} (${b.velden.join(', ')})`)
-                .join('; ')}
-              .
-            </div>
-          )}
-        </div>
+        <span className="badge badge-warning" title={onvolledigTitel}>
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ marginRight: 4 }}>
+            <path d="M7 1.5 13 12H1L7 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+            <path d="M7 6v2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            <circle cx="7" cy="10.5" r="0.7" fill="currentColor" />
+          </svg>
+          Incompleet
+        </span>
       )}
       {error && <span className="form-error">{error}</span>}
     </div>
