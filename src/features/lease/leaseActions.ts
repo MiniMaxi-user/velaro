@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { getStableRole } from '@/lib/auth/authorization'
 import { leesLeaseContract, isVolledigOndertekend } from './leaseContractConfig'
+import { KOSTENPOSTEN, type Betaler } from './leaseKostenConfig'
 import type { LeaseType, Prisma } from '@prisma/client'
 
 // ── Lease-overeenkomst acties (Lease 06, #65) ────────────────────────────────
@@ -125,6 +126,51 @@ export async function saveLeaseContract(leaseId: string, formData: FormData) {
 
   revalidatePath(`/lease/${leaseId}/contract`)
   redirect(`/lease/${leaseId}/contract`)
+}
+
+// Kostenverdeling & leasevergoeding opslaan (Lease 07, #66). Alleen stal. Behoudt
+// de overige config-velden (contractinhoud/ondertekening).
+export async function saveLeaseKosten(leaseId: string, formData: FormData) {
+  const { lease, isStal } = await getLeaseCtx(leaseId)
+  if (!isStal) throw new Error('Alleen de stal kan de kosten beheren')
+
+  const getal = (k: string): number | null => {
+    const s = (formData.get(k) as string)?.trim()
+    if (!s) return null
+    const n = Number(s)
+    return Number.isFinite(n) && n >= 0 ? n : null
+  }
+
+  const posten: Record<string, { betaler: Betaler; bedrag: number | null; onvoorzien: boolean }> = {}
+  for (const def of KOSTENPOSTEN) {
+    posten[def.key] = {
+      betaler: formData.get(`betaler_${def.key}`) === 'LEASER' ? 'LEASER' : 'EIGENAAR',
+      bedrag: getal(`bedrag_${def.key}`),
+      onvoorzien: formData.get(`onvoorzien_${def.key}`) === 'on',
+    }
+  }
+
+  const huidig =
+    lease.config && typeof lease.config === 'object' && !Array.isArray(lease.config)
+      ? (lease.config as Record<string, unknown>)
+      : {}
+
+  const config = {
+    ...huidig,
+    kosten: {
+      vergoeding: getal('vergoeding'),
+      btw: formData.get('btw') === 'on',
+      posten,
+    },
+  }
+
+  await prisma.lease.update({
+    where: { id: leaseId },
+    data: { config: config as unknown as Prisma.InputJsonValue },
+  })
+
+  revalidatePath(`/lease/${leaseId}/kosten`)
+  redirect(`/lease/${leaseId}/kosten`)
 }
 
 // Ondertekenen per partij. Bij volledige ondertekening wordt de lease ACTIEF

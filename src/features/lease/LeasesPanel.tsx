@@ -47,6 +47,7 @@ export default function LeasesPanel({ horseId, leases }: { horseId: string; leas
                   </td>
                   <td className="gezondheid-tabel__acties">
                     <Link href={`/lease/${l.id}/contract`} className="btn-ghost btn-ghost--sm">Contract</Link>
+                    <Link href={`/lease/${l.id}/kosten`} className="btn-ghost btn-ghost--sm">Kosten</Link>
                   </td>
                 </tr>
               ))}
