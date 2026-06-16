@@ -184,23 +184,19 @@ export default function PersonenBeheer({ horseId, people, members }: {
 
   return (
     <div className="gezondheid-sectie">
-      <div
-        className="gezondheid-sectie__header"
-        style={{ display: 'flex', justifyContent: 'flex-end' }}
-      >
-        {!showForm && (
+      {/* Toevoegen-knop rechts boven het grid, zoals de gezondheid-subtabs (#121).
+          Geen aparte (bruine) kopbalk meer. */}
+      {!showForm && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 18px 0' }}>
           <button
             type="button"
-            className="btn-secondary btn-ghost--sm"
+            className="btn-ghost btn-ghost--sm"
             onClick={() => setShowForm(true)}
           >
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ marginRight: 6 }}>
-              <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-            Toevoegen
+            + Toevoegen
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {people.length === 0 ? (
         <div className="gezondheid-leeg">Nog geen personen gekoppeld.</div>
