@@ -37,6 +37,9 @@ model User {
   // Contracten waarin deze gebruiker de wederpartij (paardeigenaar) is.
   counterpartyContracts Contract[] @relation("ContractCounterparty")
 
+  // Lease-overeenkomsten waarin deze gebruiker de leaser is (#59).
+  leases                Lease[]
+
   // Zakelijke / facturatiegegevens staan in een apart, 1-1 gekoppeld profiel
   // (alleen relevant voor staleigenaar-accounts). Optioneel: niet elk account
   // heeft een profielrij.
@@ -197,6 +200,11 @@ model Horse {
   recurringTasks  RecurringTask[]
   feedingPlan     FeedingPlan?
   contracts       Contract[]
+
+  // Paardenlease-module (#59). Lease-aanbod (marktplaats) en actieve lease-
+  // overeenkomsten hangen aan het centrale paardprofiel.
+  leaseListings   LeaseListing[]
+  leases          Lease[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -573,6 +581,83 @@ enum ContractStatus {
 // ── Autorisatie-logica (in app-laag, niet in schema) ─────────────────────────
 // Mag gebruiker U paard H zien?
 //   - U is OWNER/STAFF van H.stable  (via StableMember), OF
-//   - U is eigenaar of bereider van H (via HorsePerson).
+//   - U is eigenaar of bereider van H (via HorsePerson), OF
+//   - U is leaser met een ACTIEVE Lease op H (paardenlease-module #59, Lease 02).
 // Bewerken: stal OWNER/STAFF mag alles van paarden op hun stal;
-// paardeneigenaar/bereider krijgt beperkte (lees)rechten op eigen paard.
+// paardeneigenaar/bereider/leaser krijgt beperkte (lees)rechten op eigen paard.
+
+// ── Paardenlease-module (#59) ────────────────────────────────────────────────
+// Fundament voor de leasemodule (Lease 01). Twee modellen hangen aan het centrale
+// paardprofiel (Horse):
+//   - LeaseListing: een lease-AANBOD op de marktplaats (vraag/aanbod), los van een
+//     concrete leaser. (De)activeerbaar via isActive.
+//   - Lease: een concrete OVEREENKOMST die een leaser (User) aan een paard koppelt,
+//     met levenscyclus (status) en de termijnvelden waar latere stories (kosten,
+//     verzekering, kalender, notificaties) op voortbouwen.
+// Bewust géén bedragen/kostenverdeling of contractinhoud hier: die volgen als JSON/
+// eigen modellen in Lease 06/07. Dit is alleen de kern + relaties + migratie.
+
+model LeaseListing {
+  id      String @id @default(uuid()) @db.Uuid
+  horseId String @db.Uuid
+  horse   Horse  @relation(fields: [horseId], references: [id], onDelete: Cascade)
+
+  leaseType     LeaseType
+  daysPerWeek   Int? // bij deellease/bijrijden: aantal dagen per week
+  pricePerMonth Decimal? @db.Decimal(10, 2) // leasevergoeding per maand
+  region        String? // regio voor de marktplaats-filters (Lease 04)
+  discipline    String?
+  movable       Boolean  @default(false) // mag het paard verplaatst worden?
+  exclusive     Boolean  @default(true) // exclusief (één leaser) vs. gedeeld gebruik
+  description   String?
+  isActive      Boolean  @default(true) // bepaalt publieke zichtbaarheid op de marktplaats
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([horseId])
+  @@index([isActive])
+}
+
+model Lease {
+  id      String @id @default(uuid()) @db.Uuid
+  horseId String @db.Uuid
+  horse   Horse  @relation(fields: [horseId], references: [id], onDelete: Cascade)
+
+  // De leaser (account). Een actieve Lease geeft deze gebruiker leestoegang tot het
+  // paardprofiel (Lease 02).
+  leaserUserId String @db.Uuid
+  leaser       User   @relation(fields: [leaserUserId], references: [id], onDelete: Cascade)
+
+  leaseType         LeaseType
+  status            LeaseStatus @default(CONCEPT)
+  startDate         DateTime?
+  endDate           DateTime?
+  minimumTermMonths Int? // minimale looptijd in maanden
+  noticePeriodDays  Int? // opzegtermijn in dagen
+  trialEndsAt       DateTime? // einde proefperiode
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([horseId])
+  @@index([leaserUserId])
+  @@index([status])
+}
+
+// Leasevormen (Nederlandse labels in src/features/lease/leaseHelpers.ts).
+enum LeaseType {
+  FULL // full lease (volledige lease)
+  DEEL // deellease / halflease (gedeeld gebruik)
+  BIJRIJDEN // bijrijden (co-rider, lichtste vorm)
+  WEDSTRIJD // wedstrijdlease
+  KOOPOPTIE // lease met koopoptie
+  FOK // foklease
+}
+
+enum LeaseStatus {
+  CONCEPT // opgesteld, nog niet actief
+  ACTIEF // lopende lease (geeft leestoegang)
+  OPGEZEGD // opzegging loopt
+  BEEINDIGD // afgerond
+}
