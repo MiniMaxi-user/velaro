@@ -1,8 +1,10 @@
+import Link from 'next/link'
 import { getAuthUser, getDbUser } from '@/lib/auth/session'
 import TopbarUserMenu from './TopbarUserMenu'
 import TopbarSearch from './TopbarSearch'
 import NotificationBell, { type NotifItem } from './NotificationBell'
 import { getNotificationsForUser } from '@/features/berichten/queries'
+import { getLeaseUnreadCount } from '@/features/lease/inquiryQueries'
 
 export default async function Topbar() {
   const user = await getAuthUser()
@@ -11,12 +13,15 @@ export default async function Topbar() {
   let initials = displayName.slice(0, 2).toUpperCase()
   let notifItems: NotifItem[] = []
   let notifCount = 0
+  let leaseUnread = 0
 
   if (user) {
-    const [dbUser, notifications] = await Promise.all([
+    const [dbUser, notifications, leaseCount] = await Promise.all([
       getDbUser(user.id),
       getNotificationsForUser(user.id),
+      getLeaseUnreadCount(user.id),
     ])
+    leaseUnread = leaseCount
 
     if (dbUser?.name) {
       displayName = dbUser.name
@@ -41,6 +46,18 @@ export default async function Topbar() {
       <TopbarSearch />
       <div className="topbar-spacer" />
       <div className="topbar-actions">
+        <Link
+          href="/berichten"
+          className="topbar-icon-btn"
+          title="Berichten"
+          aria-label="Berichten"
+          style={{ position: 'relative' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 3.5h12v8H5l-3 2.5V3.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+          </svg>
+          {leaseUnread > 0 && <span className="notif-badge">{leaseUnread > 9 ? '9+' : leaseUnread}</span>}
+        </Link>
         <NotificationBell items={notifItems} count={notifCount} />
         <div className="topbar-divider" />
         <TopbarUserMenu initials={initials} displayName={displayName} />

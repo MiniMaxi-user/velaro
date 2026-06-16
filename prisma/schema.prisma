@@ -40,6 +40,11 @@ model User {
   // Lease-overeenkomsten waarin deze gebruiker de leaser is (#59).
   leases                Lease[]
 
+  // Lease-marktplaats (Lease 05, #64): interesse-gesprekken die deze gebruiker is
+  // gestart, en de losse berichten die deze gebruiker schreef.
+  leaseInquiries        LeaseInquiry[]        @relation("LeaseInquirer")
+  leaseInquiryMessages  LeaseInquiryMessage[]
+
   // Zakelijke / facturatiegegevens staan in een apart, 1-1 gekoppeld profiel
   // (alleen relevant voor staleigenaar-accounts). Optioneel: niet elk account
   // heeft een profielrij.
@@ -612,6 +617,9 @@ model LeaseListing {
   description   String?
   isActive      Boolean  @default(true) // bepaalt publieke zichtbaarheid op de marktplaats
 
+  // Interesse-gesprekken op dit aanbod (Lease 05, #64).
+  inquiries LeaseInquiry[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -660,4 +668,43 @@ enum LeaseStatus {
   ACTIEF // lopende lease (geeft leestoegang)
   OPGEZEGD // opzegging loopt
   BEEINDIGD // afgerond
+}
+
+// ── Lease-interesse / in-app contact (Lease 05, #64) ─────────────────────────
+// Eén-op-één gesprekthread tussen een geïnteresseerde (inquirer) en de aanbieder
+// (de stal van het paard) over een specifiek lease-aanbod. Bewust een eigen, licht
+// model i.p.v. het broadcast Message-model: berichten zijn hier privé tussen twee
+// partijen en hangen aan een listing. Eén thread per geïnteresseerde per aanbod.
+model LeaseInquiry {
+  id        String       @id @default(uuid()) @db.Uuid
+  listingId String       @db.Uuid
+  listing   LeaseListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  inquirerUserId String @db.Uuid
+  inquirer       User   @relation("LeaseInquirer", fields: [inquirerUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages LeaseInquiryMessage[]
+
+  @@unique([listingId, inquirerUserId])
+  @@index([listingId])
+  @@index([inquirerUserId])
+}
+
+model LeaseInquiryMessage {
+  id        String       @id @default(uuid()) @db.Uuid
+  inquiryId String       @db.Uuid
+  inquiry   LeaseInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  authorId String @db.Uuid
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  body   String
+  readAt DateTime? // gelezen door de wederpartij (null = ongelezen)
+
+  createdAt DateTime @default(now())
+
+  @@index([inquiryId])
 }
