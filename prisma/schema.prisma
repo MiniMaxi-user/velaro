@@ -645,6 +645,10 @@ model Lease {
   noticePeriodDays  Int? // opzegtermijn in dagen
   trialEndsAt       DateTime? // einde proefperiode
 
+  // Rijke contractinhoud + ondertekening (Lease 06, #65) als JSON, zodat het schema
+  // niet bij elke contract-uitbreiding hoeft te migreren — net als Contract.config.
+  config Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

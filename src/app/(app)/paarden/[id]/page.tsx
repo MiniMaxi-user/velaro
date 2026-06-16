@@ -6,6 +6,8 @@ import { getStableRole, canViewHorse, getLeaseForHorse } from '@/lib/auth/author
 import { leaseTypeLabel } from '@/features/lease/leaseHelpers'
 import { getLeaseListingForHorse } from '@/features/lease/listingQueries'
 import LeaseListingPanel, { type LeaseListingView } from '@/features/lease/LeaseListingPanel'
+import { getLeasesForHorse } from '@/features/lease/leaseQueries'
+import LeasesPanel from '@/features/lease/LeasesPanel'
 import { GESLACHT_LABELS, RELATIETYPE_LABELS, STALLINGSVORM_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
 import { RelatietypeBadge, StallingsvormBadge } from '@/features/paarden/RelatieBadges'
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
@@ -55,7 +57,7 @@ export default async function PaardDetailPage({ params }: Props) {
   const horse = await getHorse(id)
   if (!horse) notFound()
 
-  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel, fotoUrl, lease, leaseListing] = await Promise.all([
+  const [canView, role, vaccinaties, ontwormingen, bezzoeken, hoefsmitBezoeKen, metingen, berichten, voederschema, contractenInitieel, fotoUrl, lease, leaseListing, leases] = await Promise.all([
     canViewHorse(user.id, id),
     getStableRole(user.id, horse.stableId),
     getVaccinaties(id),
@@ -69,6 +71,7 @@ export default async function PaardDetailPage({ params }: Props) {
     getPaardFotoSignedUrl(id),
     getLeaseForHorse(user.id, id),
     getLeaseListingForHorse(id),
+    getLeasesForHorse(id),
   ])
 
   const stalleden = role ? await getStableMembersForHorse(id) : []
@@ -308,7 +311,12 @@ export default async function PaardDetailPage({ params }: Props) {
               isActive: leaseListing.isActive,
             }
           : null
-        const leasePanel = <LeaseListingPanel horseId={id} listing={leaseView} />
+        const leasePanel = (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <LeaseListingPanel horseId={id} listing={leaseView} />
+            <LeasesPanel horseId={id} leases={leases} />
+          </div>
+        )
 
         // Stalleden (OWNER/STAFF): tab-layout met vaste contextkolom rechts.
         if (canEdit) {
