@@ -85,9 +85,9 @@ export default function GezondheidTabs({
 
   return (
     <div className="panel">
-      {/* Tab-header */}
-      <div className="panel-header" style={{ flexDirection: 'column', gap: 0, padding: 0 }}>
-        <div className="tabs-inner" style={{ padding: '0 20px' }}>
+      {/* Tab-header: subtabs links, toevoegen-knop rechts op dezelfde rij (#120). */}
+      <div className="panel-header" style={{ padding: 0, borderBottom: 'none' }}>
+        <div className="tabs-inner" style={{ padding: '0 12px 0 20px', alignItems: 'center' }}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -106,38 +106,18 @@ export default function GezondheidTabs({
               )}
             </button>
           ))}
-        </div>
 
-        {/* Toevoegen-knop per tab */}
-        {canEdit && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 20px 0' }}>
-            {activeTab === 'vaccinaties' && (
-              <Link href={`/paarden/${horseId}/vaccinaties/nieuw`} className="btn-ghost btn-ghost--sm">
-                + Toevoegen
-              </Link>
-            )}
-            {activeTab === 'ontworming' && (
-              <Link href={`/paarden/${horseId}/ontworming/nieuw`} className="btn-ghost btn-ghost--sm">
-                + Toevoegen
-              </Link>
-            )}
-            {activeTab === 'dierenarts' && (
-              <Link href={`/paarden/${horseId}/dierenarts/nieuw`} className="btn-ghost btn-ghost--sm">
-                + Toevoegen
-              </Link>
-            )}
-            {activeTab === 'hoefsmit' && (
-              <Link href={`/paarden/${horseId}/hoefsmit/nieuw`} className="btn-ghost btn-ghost--sm">
-                + Toevoegen
-              </Link>
-            )}
-            {activeTab === 'metingen' && (
-              <Link href={`/paarden/${horseId}/metingen/nieuw`} className="btn-ghost btn-ghost--sm">
-                + Toevoegen
-              </Link>
-            )}
-          </div>
-        )}
+          {/* Toevoegen-knop voor de actieve tab, rechts uitgelijnd. */}
+          {canEdit && (
+            <Link
+              href={`/paarden/${horseId}/${activeTab}/nieuw`}
+              className="btn-ghost btn-ghost--sm"
+              style={{ marginLeft: 'auto' }}
+            >
+              + Toevoegen
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Tab-inhoud: Vaccinaties */}
