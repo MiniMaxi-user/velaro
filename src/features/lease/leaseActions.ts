@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { getStableRole } from '@/lib/auth/authorization'
 import { leesLeaseContract, isVolledigOndertekend } from './leaseContractConfig'
+import { leesVerzekering, magActiverenVerzekering } from './leaseVerzekeringConfig'
 import { KOSTENPOSTEN, type Betaler } from './leaseKostenConfig'
 import type { LeaseType, Prisma } from '@prisma/client'
 
@@ -96,8 +97,14 @@ export async function saveLeaseContract(leaseId: string, formData: FormData) {
   }
 
   const tekst = (k: string) => (formData.get(k) as string)?.trim() || null
+  // Behoud alle andere config-sleutels (kosten, verzekering) door over de ruwe
+  // config te mergen; alleen de contractvelden en ondertekening worden gezet.
+  const rawObj =
+    lease.config && typeof lease.config === 'object' && !Array.isArray(lease.config)
+      ? (lease.config as Record<string, unknown>)
+      : {}
   const config = {
-    ...huidig,
+    ...rawObj,
     gebruiksrecht: tekst('gebruiksrecht'),
     disciplines: tekst('disciplines'),
     kostenverdeling: tekst('kostenverdeling'),
@@ -109,6 +116,7 @@ export async function saveLeaseContract(leaseId: string, formData: FormData) {
     minderjarig: formData.get('minderjarig') === 'on',
     voogdNaam: tekst('voogdNaam'),
     bijzonderheden: tekst('bijzonderheden'),
+    ondertekening: huidig.ondertekening,
   }
 
   await prisma.lease.update({
@@ -187,9 +195,25 @@ export async function signLease(
   const naam = (formData.get('naam') as string)?.trim()
   if (!naam) throw new Error('Vul een naam in om te ondertekenen')
 
-  const config = leesLeaseContract(lease.config)
-  config.ondertekening[partij] = { naam, datum: new Date().toISOString() }
-  const volledig = isVolledigOndertekend(config)
+  const contract = leesLeaseContract(lease.config)
+  contract.ondertekening[partij] = { naam, datum: new Date().toISOString() }
+  const volledig = isVolledigOndertekend(contract)
+
+  // Gate (Lease 08, #67): de lease mag pas ACTIEF worden als de meeverzekerd-vraag
+  // beantwoord is (JA) of het risico expliciet bevestigd is.
+  if (volledig && !magActiverenVerzekering(leesVerzekering(lease.config))) {
+    throw new Error(
+      'Beantwoord eerst de meeverzekerd-vraag of bevestig het risico bij "Verzekering & aansprakelijkheid" voordat de lease actief wordt.',
+    )
+  }
+
+  // Behoud alle andere config-sleutels (kosten, verzekeringBlok) en zet enkel de
+  // ondertekening.
+  const rawObj =
+    lease.config && typeof lease.config === 'object' && !Array.isArray(lease.config)
+      ? (lease.config as Record<string, unknown>)
+      : {}
+  const config = { ...rawObj, ondertekening: contract.ondertekening }
 
   await prisma.lease.update({
     where: { id: leaseId },
