@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
 import { getHorsesForOwner, getFeedingPlan, getLeasedHorsesForUser } from '@/features/paarden/queries'
 import { leaseTypeLabel } from '@/features/lease/leaseHelpers'
+import { getLeaseMijlpalenForUser } from '@/features/lease/mijlpaalQueries'
+import LeaseMijlpalenPanel from '@/features/lease/LeaseMijlpalenPanel'
 import { getMessagesForHorseView, getUnreadCountForHorseView } from '@/features/berichten/queries'
 import BerichtItem from '@/features/berichten/BerichtItem'
 import { getZorgActiesVoorPaard } from '@/features/gezondheid/queries'
@@ -30,9 +32,10 @@ export default async function EigenaarPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
 
-  const [horses, leasedHorses] = await Promise.all([
+  const [horses, leasedHorses, leaseMijlpalen] = await Promise.all([
     getHorsesForOwner(user.id),
     getLeasedHorsesForUser(user.id),
+    getLeaseMijlpalenForUser(user.id),
   ])
   const heeftPaarden = horses.length > 0 || leasedHorses.length > 0
 
@@ -88,6 +91,12 @@ export default async function EigenaarPage() {
           <h1 className="page-title">Mijn paarden</h1>
         </div>
       </div>
+
+      {leaseMijlpalen.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <LeaseMijlpalenPanel regels={leaseMijlpalen} />
+        </div>
+      )}
 
       {!heeftPaarden ? (
         <div className="empty-state">
