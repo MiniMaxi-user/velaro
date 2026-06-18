@@ -183,7 +183,9 @@ export default function PersonenBeheer({ horseId, people, members }: {
   }
 
   return (
-    <div className="gezondheid-sectie">
+    // Eén enkele panel-kaart met het grid direct erin, identiek aan GezondheidTabs.
+    // Geen extra bordered container (panel-body) eromheen meer (#121).
+    <div className="panel">
       {/* Toevoegen-knop rechts boven het grid, zoals de gezondheid-subtabs (#121).
           Geen aparte (bruine) kopbalk meer. */}
       {!showForm && (

@@ -330,11 +330,7 @@ export default async function PaardDetailPage({ params }: Props) {
                 algemeen={algemeenPanel}
                 gezondheid={gezondheidPanel}
                 eigenaren={
-                  <div className="panel">
-                    <div className="panel-body">
-                      <PersonenBeheer horseId={id} people={horse.people} members={stalleden} />
-                    </div>
-                  </div>
+                  <PersonenBeheer horseId={id} people={horse.people} members={stalleden} />
                 }
                 voederschema={voederschemaPanel}
                 berichten={berichtenPanel}
