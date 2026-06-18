@@ -63,14 +63,18 @@ export default function PersonenBeheer({ horseId, people, members }: {
   const [addRider, setAddRider] = useState(false)
 
   // Zoek-dropdown (autocomplete) over stalleden — gedrag identiek aan TopbarSearch.
+  // `query` is de directe invoerwaarde; `debouncedQuery` wordt pas ~500ms na het
+  // stoppen met typen bijgewerkt en stuurt de getoonde resultaten aan (#123).
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [email, setEmail] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const searchRef = useRef<HTMLDivElement>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const resultaten = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = debouncedQuery.trim().toLowerCase()
     if (q.length < 2) return []
     return members
       .filter((m) => {
@@ -79,7 +83,7 @@ export default function PersonenBeheer({ horseId, people, members }: {
         return naam.includes(q) || mail.includes(q)
       })
       .slice(0, 8)
-  }, [query, members])
+  }, [debouncedQuery, members])
 
   // Sluit de dropdown bij klikken buiten het zoekveld.
   useEffect(() => {
@@ -93,17 +97,37 @@ export default function PersonenBeheer({ horseId, people, members }: {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Debounce-timer opruimen bij unmount.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
   function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value
     setQuery(val)
     setEmail('')
     setActiveIndex(-1)
-    setIsOpen(val.trim().length >= 2)
+    // Debounce: pas na ~500ms zonder verder typen de resultaten (her)berekenen
+    // en de dropdown openen — gelijk aan de topbar-zoekfunctie.
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (val.trim().length < 2) {
+      setDebouncedQuery('')
+      setIsOpen(false)
+      return
+    }
+    timerRef.current = setTimeout(() => {
+      setDebouncedQuery(val)
+      setIsOpen(true)
+    }, 500)
   }
 
   function handleSelect(member: StableMember) {
     // Na keuze toont het invoerveld alleen het e-mailadres.
+    if (timerRef.current) clearTimeout(timerRef.current)
     setQuery(member.email)
+    setDebouncedQuery(member.email)
     setEmail(member.email)
     setIsOpen(false)
     setActiveIndex(-1)
@@ -129,9 +153,11 @@ export default function PersonenBeheer({ horseId, people, members }: {
   }
 
   function resetForm() {
+    if (timerRef.current) clearTimeout(timerRef.current)
     setShowForm(false)
     setAddError(null)
     setQuery('')
+    setDebouncedQuery('')
     setEmail('')
     setIsOpen(false)
     setActiveIndex(-1)
@@ -270,7 +296,7 @@ export default function PersonenBeheer({ horseId, people, members }: {
                 value={query}
                 onChange={handleQueryChange}
                 onKeyDown={handleKeyDown}
-                onFocus={() => { if (query.trim().length >= 2) setIsOpen(true) }}
+                onFocus={() => { if (resultaten.length > 0) setIsOpen(true) }}
                 // Zoekveld, geen login: wachtwoordmanagers (LastPass/1Password) en
                 // browser-autofill onderdrukken zodat hun pop-up niet verschijnt (#123).
                 autoComplete="off"
