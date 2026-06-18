@@ -514,6 +514,15 @@ model Contract {
   // contract-PDF; daarom een eigen koppelmodel (ContractBijlage).
   bijlagen ContractBijlage[]
 
+  // 1:1-koppeling naar de operationele Lease (contract-unify, [Unify 01] #127).
+  // Een lease-Contract (family=LEASE) brengt straks bij activatie ([Unify 06] #132)
+  // een 1:1 gekoppelde Lease voort. Die Lease — niet het contract — stuurt het
+  // operationele gevolg aan: leaser-toegang tot het paardprofiel, de gedeelde
+  // kalender (deellease) en de mijlpaal-/notificatiemotor. De leaser-toegang blijft
+  // dus afgeleid van een ACTIEVE Lease, niet van het Contract. Back-relation; de FK
+  // (contractId, @unique) staat op Lease.
+  lease Lease?
+
   @@index([horseId])
   @@index([stableId])
   @@index([counterpartyUserId])
@@ -641,6 +650,14 @@ model Lease {
   // paardprofiel (Lease 02).
   leaserUserId String @db.Uuid
   leaser       User   @relation(fields: [leaserUserId], references: [id], onDelete: Cascade)
+
+  // 1:1-koppeling naar het bron-Contract (contract-unify, [Unify 01] #127).
+  // Nullable omdat (a) bestaande Lease-rijen geen contract hebben en (b) de koppeling
+  // pas bij activatie van een lease-Contract ontstaat ([Unify 06] #132). @unique dwingt
+  // de 1:1-cardinaliteit af. onDelete: SetNull zodat de operationele Lease (en daarmee
+  // leaser-toegang/historie) het verwijderen van zijn Contract overleeft.
+  contractId String?   @unique @db.Uuid
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
 
   leaseType         LeaseType
   status            LeaseStatus @default(CONCEPT)

@@ -1,4 +1,5 @@
 import type { ContractStatus, ContractFamily, Prisma } from '@prisma/client'
+import { LEASE_TYPE_LABELS } from '../lease/leaseHelpers'
 import { leesPrijsLooptijd } from './prijsLooptijd'
 import { leesVersieGroepId } from './statusMachine'
 import {
@@ -46,11 +47,21 @@ export const CONTRACT_FAMILY_LABELS: Record<ContractFamily, string> = {
   LEASE: 'Lease',
 }
 
-// Type-labels binnen de stalling-familie. Het contracttype volgt de stallingsvorm
-// van het paard (#113): volledig pension → FULL_PENSION, halfpension → HALF_PENSION.
+// Type-labels per contractfamilie. Het Contract.type is een vrije String (geen enum),
+// conform de JSON/string-conventie van de contractmodule.
+//
+// STALLING (#113): het contracttype volgt de stallingsvorm van het paard:
+//   volledig pension → FULL_PENSION, halfpension → HALF_PENSION.
+//
+// LEASE (contract-unify, [Unify 01] #127): de lease-contracttypes gebruiken dezelfde
+// namen als de LeaseType-enum (FULL/DEEL/BIJRIJDEN/WEDSTRIJD/KOOPOPTIE/FOK), zodat
+// Contract.type 1:1 overeenkomt met de gekoppelde Lease.leaseType. De Nederlandse
+// labels worden hergebruikt uit LEASE_TYPE_LABELS (leaseHelpers.ts) als bron van
+// waarheid — niet hertypen met afwijkende spelling.
 export const CONTRACT_TYPE_LABELS: Record<string, string> = {
   FULL_PENSION: 'Full pension',
   HALF_PENSION: 'Half pension',
+  ...LEASE_TYPE_LABELS,
 }
 
 export function contractTypeLabel(type: string): string {
