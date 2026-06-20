@@ -29,7 +29,12 @@ import {
   leesRetentierecht,
 } from './beeindiging'
 import { formatDatum as formatDatumVerleng } from '@/features/paarden/paardHelpers'
-import type { ContractStatus, Prisma } from '@prisma/client'
+import LeaseOndertekenActies from './LeaseOndertekenActies'
+import {
+  leesLeaseContractConfig,
+  leesLeaseOndertekening,
+} from './leaseContract'
+import type { ContractFamily, ContractStatus, Prisma } from '@prisma/client'
 
 // Bouwt de verleng-context (STAL-14, #87) voor de stal-zijde van een contract:
 // alleen voor een actief/verlengd contract met EXPLICIET-modus waarvan het
@@ -51,6 +56,7 @@ function bouwVerlengContext(
 
 type ContractRow = {
   id: string
+  family: ContractFamily
   type: string
   status: ContractStatus
   startDate: Date | null
@@ -95,9 +101,15 @@ export default function ContractenPanel({
   contracts,
   opties,
   naleving = {},
+  currentUserId,
 }: {
   horseId: string
   contracts: ContractRow[]
+  // Huidige gebruiker — om per-partij ondertekening (stal/leaser) van een aangeboden
+  // leasecontract te bepalen ([Unify 06] #132). Dit paneel is de stal-weergave, dus
+  // de gebruiker mag het stal-blok tekenen; het leaser-blok alleen als hij toevallig
+  // ook de wederpartij is. De server dwingt de autorisatie nogmaals af.
+  currentUserId?: string
   // Contractopties ([Unify 03] #129): stalling + alle leasevormen, per familie
   // gegroepeerd, met per optie of die mogelijk is (en zo niet, met welke reden).
   opties: ContractOptiesPerFamilie[]
@@ -240,6 +252,30 @@ export default function ContractenPanel({
                                 </li>
                               ))}
                             </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {c.family === 'LEASE' && c.status === 'AANGEBODEN' && (
+                      <tr>
+                        <td colSpan={6} style={{ paddingTop: 0 }}>
+                          <div className="contract-naleving">
+                            <div className="contract-naleving__titel">
+                              Ondertekening leasecontract
+                            </div>
+                            <LeaseOndertekenActies
+                              horseId={horseId}
+                              contractId={c.id}
+                              ondertekening={leesLeaseOndertekening(c.config)}
+                              minderjarig={
+                                leesLeaseContractConfig(c.config).berijder.minderjarig
+                              }
+                              magStal
+                              magLeaser={
+                                currentUserId != null &&
+                                c.counterpartyUserId === currentUserId
+                              }
+                            />
                           </div>
                         </td>
                       </tr>

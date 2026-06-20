@@ -85,6 +85,9 @@ import { LEASE_TYPE_LABELS } from '../lease/leaseHelpers'
 import {
   kentDagenPerWeek,
   kentKoopoptie,
+  leesLeaseContractConfig,
+  leesLeaseOndertekening,
+  isLeaseVolledigOndertekend,
   type LeaseContractStepperConfig,
 } from './leaseContract'
 import {
@@ -94,6 +97,8 @@ import {
   type LeaseKosten,
 } from '../lease/leaseKostenConfig'
 import {
+  leesVerzekering,
+  magActiverenVerzekering,
   type LeaseVerzekering,
   type Meeverzekerd,
 } from '../lease/leaseVerzekeringConfig'
@@ -811,6 +816,239 @@ export async function updateLeaseContract(
 
   revalidatePath(`/paarden/${horseId}`)
   redirect(`/paarden/${horseId}?tab=contracten`)
+}
+
+// ── Lease-ondertekening + activatie → 1:1 Lease ([Unify 06] #132) ────────────
+// Scharnierpunt van het contract-unify-epic: hier ondertekenen de partijen (stal /
+// leaser / voogd) een aangeboden leasecontract binnen de unified contractweergave,
+// en bij volledige ondertekening ontstaat de operationele, ACTIEVE Lease (1:1 aan
+// het Contract). Dit reproduceert de oude losse `signLease`-flow
+// (features/lease/leaseActions.ts) maar dan familie-bewust op het Contract:
+//   - per-partij autorisatie (stal = OWNER/STAFF; leaser/voogd = wederpartij);
+//   - append-only ondertekening op Contract.config.lease.ondertekening;
+//   - volledigheid via isLeaseVolledigOndertekend (= isVolledigOndertekend-regel);
+//   - harde meeverzekerd-gate via magActiverenVerzekering (doorgeschoven uit #131);
+//   - statusovergang AANGEBODEN → ACTIEF via de statusmachine;
+//   - idempotente create/update van de 1:1 Lease (Lease.contractId @unique, #127).
+// De stalling-flow (acceptContract, enkel-eigenaar) blijft hiernaast ongewijzigd.
+
+// Projecteert de operationele Lease-velden uit het bron-Contract. Defensief/null-safe,
+// conform de leesconventie van leaseContract.ts. `leaserUserId` = de wederpartij
+// (Contract.counterpartyUserId); de termijnvelden komen uit config.lease.looptijd.
+function projecteerLeaseVelden(contract: {
+  type: string
+  counterpartyUserId: string | null
+  startDate: Date | null
+  config: Prisma.JsonValue | null
+}): {
+  leaseType: LeaseType
+  leaserUserId: string
+  startDate: Date | null
+  endDate: Date | null
+  minimumTermMonths: number | null
+  noticePeriodDays: number | null
+  trialEndsAt: Date | null
+  config: Prisma.InputJsonValue
+} {
+  if (!contract.counterpartyUserId) {
+    throw new Error('Kies eerst een wederpartij (leaser) voordat de lease actief wordt.')
+  }
+  const leaseType = leesLeaseType(contract.type)
+  const lease = leesLeaseContractConfig(contract.config)
+  const { looptijd } = lease
+
+  const datum = (s: string | null): Date | null => (s ? new Date(s) : null)
+
+  return {
+    leaseType,
+    leaserUserId: contract.counterpartyUserId,
+    startDate: contract.startDate,
+    endDate: datum(looptijd.einddatum),
+    minimumTermMonths: looptijd.minimumTermijnMaanden,
+    noticePeriodDays: looptijd.opzegtermijnDagen,
+    // Proefperiode-einddatum alleen wanneer de proefperiode actief is.
+    trialEndsAt: looptijd.proefperiode.actief ? datum(looptijd.proefperiode.einddatum) : null,
+    // Operationele lease-config voor kalender/mijlpalen: de volledige lease-config
+    // (inclusief ondertekening) defensief geprojecteerd. Spiegelt Lease.config.
+    config: lease as unknown as Prisma.InputJsonValue,
+  }
+}
+
+// Onderteken het stal-/leaser-/voogd-blok van een aangeboden leasecontract. Bij
+// volledige ondertekening + voldane meeverzekerd-gate gaat het contract ACTIEF en
+// ontstaat (idempotent) de 1:1 Lease. Server-side afgedwongen per partij.
+export async function signLeaseContract(
+  horseId: string,
+  contractId: string,
+  partij: 'stal' | 'leaser' | 'voogd',
+  formData: FormData,
+) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const contract = await prisma.contract.findUnique({
+    where: { id: contractId },
+    include: { lease: { select: { id: true } } },
+  })
+  if (!contract || contract.horseId !== horseId) {
+    throw new Error('Contract niet gevonden')
+  }
+  if (contract.family !== 'LEASE') {
+    throw new Error('Dit is geen leasecontract.')
+  }
+  if (contract.status !== 'AANGEBODEN') {
+    throw new Error('Alleen een aangeboden leasecontract kan worden ondertekend.')
+  }
+
+  // Per-partij autorisatie: het stal-blok mag uitsluitend door OWNER/STAFF van de
+  // stal worden getekend; het leaser-/voogd-blok uitsluitend door de wederpartij
+  // (Contract.counterpartyUserId). Server-side afgedwongen, niet alleen in de UI.
+  const role = await getStableRole(user.id, contract.stableId)
+  const isStal = role !== null
+  const isWederpartij = contract.counterpartyUserId === user.id
+  if (partij === 'stal' && !isStal) {
+    throw new Error('Alleen de stal kan het stal-blok ondertekenen.')
+  }
+  if ((partij === 'leaser' || partij === 'voogd') && !isWederpartij) {
+    throw new Error('Alleen de leaser kan dit blok ondertekenen.')
+  }
+
+  const naam = (formData.get('naam') as string)?.trim()
+  if (!naam) throw new Error('Vul een naam in om te ondertekenen.')
+
+  // Berijder-minderjarigheid bepaalt of het voogd-blok vereist is voor volledigheid.
+  const leaseConfig = leesLeaseContractConfig(contract.config)
+  const minderjarig = leaseConfig.berijder.minderjarig
+
+  // Append-only: voeg de ondertekening van deze partij toe aan het bestaande blok.
+  const ondertekening = leesLeaseOndertekening(contract.config)
+  ondertekening[partij] = { naam, datum: new Date().toISOString() }
+  const volledig = isLeaseVolledigOndertekend(ondertekening, minderjarig)
+
+  // Harde meeverzekerd-gate (doorgeschoven uit #131): de lease mag pas ACTIEF worden
+  // als de meeverzekerd-vraag met JA beantwoord is óf het risico expliciet bevestigd.
+  if (volledig && !magActiverenVerzekering(leesVerzekering({ verzekeringBlok: leaseConfig.verzekering }))) {
+    throw new Error(
+      'Beantwoord eerst de meeverzekerd-vraag met "Ja" of bevestig het risico bij "Verzekering & aansprakelijkheid" voordat de lease actief wordt.',
+    )
+  }
+
+  // Bestaande config behouden; alleen config.lease.ondertekening bijwerken.
+  const rootConfig =
+    contract.config && typeof contract.config === 'object' && !Array.isArray(contract.config)
+      ? (contract.config as Record<string, unknown>)
+      : {}
+  const leaseRaw =
+    rootConfig.lease && typeof rootConfig.lease === 'object' && !Array.isArray(rootConfig.lease)
+      ? (rootConfig.lease as Record<string, unknown>)
+      : {}
+
+  if (!volledig) {
+    // Nog niet volledig: enkel de ondertekening wegschrijven, status blijft AANGEBODEN.
+    const nieuweConfig = {
+      ...rootConfig,
+      lease: { ...leaseRaw, ondertekening },
+    }
+    await prisma.contract.update({
+      where: { id: contractId },
+      data: { config: nieuweConfig as Prisma.InputJsonValue },
+    })
+    revalidatePath(`/paarden/${horseId}`)
+    revalidatePath('/eigenaar')
+    return
+  }
+
+  // Volledig ondertekend: AANGEBODEN → ACTIEF. Statusmachine borgt de overgang.
+  assertOvergangToegestaan(contract.status, 'ACTIEF')
+
+  const configMetOndertekening = {
+    ...rootConfig,
+    lease: { ...leaseRaw, ondertekening },
+  }
+  // Statusovergang ook append-only in config.statusHistorie vastleggen (zoals stalling).
+  const nieuweConfig = {
+    ...metStatusHistorie(
+      configMetOndertekening as Prisma.JsonValue,
+      contract.status,
+      'ACTIEF',
+      user.id,
+    ),
+  }
+
+  const leaseVelden = projecteerLeaseVelden(contract)
+
+  const horse = await prisma.horse.findUnique({
+    where: { id: contract.horseId },
+    select: { name: true },
+  })
+
+  // Transactie: statusovergang + idempotente Lease-create/-update + melding. Zo kan
+  // een geactiveerd leasecontract nooit zonder gekoppelde Lease bestaan. De 1:1
+  // @unique op Lease.contractId borgt dat opnieuw activeren geen tweede Lease oplevert.
+  await prisma.$transaction(async (tx) => {
+    await tx.contract.update({
+      where: { id: contractId },
+      data: { status: 'ACTIEF', config: nieuweConfig as Prisma.InputJsonValue },
+    })
+
+    const bestaandeLease = await tx.lease.findUnique({
+      where: { contractId },
+      select: { id: true },
+    })
+    if (bestaandeLease) {
+      await tx.lease.update({
+        where: { id: bestaandeLease.id },
+        data: {
+          horseId: contract.horseId,
+          leaserUserId: leaseVelden.leaserUserId,
+          leaseType: leaseVelden.leaseType,
+          status: 'ACTIEF',
+          startDate: leaseVelden.startDate,
+          endDate: leaseVelden.endDate,
+          minimumTermMonths: leaseVelden.minimumTermMonths,
+          noticePeriodDays: leaseVelden.noticePeriodDays,
+          trialEndsAt: leaseVelden.trialEndsAt,
+          config: leaseVelden.config,
+        },
+      })
+    } else {
+      await tx.lease.create({
+        data: {
+          horseId: contract.horseId,
+          contractId,
+          leaserUserId: leaseVelden.leaserUserId,
+          leaseType: leaseVelden.leaseType,
+          status: 'ACTIEF',
+          startDate: leaseVelden.startDate,
+          endDate: leaseVelden.endDate,
+          minimumTermMonths: leaseVelden.minimumTermMonths,
+          noticePeriodDays: leaseVelden.noticePeriodDays,
+          trialEndsAt: leaseVelden.trialEndsAt,
+          config: leaseVelden.config,
+        },
+      })
+    }
+
+    await tx.message.create({
+      data: {
+        horseId: contract.horseId,
+        authorId: user.id,
+        subject: 'Leasecontract geactiveerd',
+        body: `Het leasecontract voor ${
+          horse?.name ?? 'het paard'
+        } is volledig ondertekend en nu actief.`,
+      },
+    })
+  })
+
+  // PDF van de geactiveerde versie genereren/actualiseren (zoals bij offerContract).
+  await genereerEnSlaContractPdfOp(contractId)
+
+  revalidatePath(`/paarden/${horseId}`)
+  revalidatePath('/eigenaar')
 }
 
 // Biedt een concept-contract aan de paardeigenaar aan (STAL-08, #81). Server-side

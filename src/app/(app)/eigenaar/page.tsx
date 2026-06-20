@@ -10,6 +10,7 @@ import BerichtItem from '@/features/berichten/BerichtItem'
 import { getZorgActiesVoorPaard } from '@/features/gezondheid/queries'
 import {
   getAangebodenContractVoorEigenaar,
+  getAangebodenLeaseContractVoorLeaser,
   getBijlagenMetUrls,
   getContractsForEigenaar,
 } from '@/features/contracten/queries'
@@ -20,6 +21,11 @@ import {
 import ContractSamenvatting from '@/features/contracten/ContractSamenvatting'
 import ContractOverzicht from '@/features/contracten/ContractOverzicht'
 import EigenaarContractActies from '@/features/contracten/EigenaarContractActies'
+import LeaseOndertekenActies from '@/features/contracten/LeaseOndertekenActies'
+import {
+  leesLeaseContractConfig,
+  leesLeaseOndertekening,
+} from '@/features/contracten/leaseContract'
 import VerlengActies from '@/features/contracten/VerlengActies'
 import {
   kanExplicietBevestigen,
@@ -48,6 +54,7 @@ export default async function EigenaarPage() {
     voederschemaPerPaard,
     aangebodenContractPerPaard,
     eigenaarContractenVoorVerlenging,
+    aangebodenLeaseContractPerPaard,
   ] = await Promise.all([
     Promise.all(horses.map((h) => getMessagesForHorseView(h.id, 6))),
     Promise.all(horses.map((h) => getUnreadCountForHorseView(user.id, h.id))),
@@ -55,6 +62,9 @@ export default async function EigenaarPage() {
     Promise.all(horses.map((h) => getFeedingPlan(h.id))),
     Promise.all(horses.map((h) => getAangebodenContractVoorEigenaar(h.id, user.id))),
     getContractsForEigenaar(user.id),
+    // Aangeboden leasecontract per paard waar deze gebruiker de leaser (wederpartij)
+    // van is ([Unify 06] #132) — om het te ondertekenen binnen de unified weergave.
+    Promise.all(horses.map((h) => getAangebodenLeaseContractVoorLeaser(h.id, user.id))),
   ])
 
   // Lazy stilzwijgende verlenging (STAL-14, #87): bij bezoek aan het eigenaar-
@@ -185,6 +195,7 @@ export default async function EigenaarPage() {
             const leeftijd = horse.dateOfBirth ? berekenLeeftijd(new Date(horse.dateOfBirth)) : null
             const berichten = berichtenPerPaard[index]
             const aangebodenContract = aangebodenContractPerPaard[index]
+            const aangebodenLeaseContract = aangebodenLeaseContractPerPaard[index]
             const zorgActies = zorgActiesPerPaard[index]
             const verlopenActies = zorgActies.filter((a) => a.isVerlopen)
             const voederschema = voederschemaPerPaard[index]
@@ -260,6 +271,49 @@ export default async function EigenaarPage() {
                       <div style={{ marginTop: 16 }}>
                         <EigenaarContractActies contractId={aangebodenContract.id} />
                       </div>
+                    </div>
+                  )}
+
+                  {aangebodenLeaseContract && (
+                    <div
+                      style={{
+                        marginBottom: 16,
+                        paddingBottom: 16,
+                        borderBottom: '1px solid var(--velaro-color-border)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          marginBottom: 12,
+                        }}
+                      >
+                        <div className="label" style={{ margin: 0 }}>Leasecontract</div>
+                        <span className="badge badge-gold">Aangeboden</span>
+                      </div>
+                      <p
+                        style={{
+                          color: 'var(--velaro-color-muted)',
+                          fontSize: '0.875rem',
+                          marginBottom: 12,
+                        }}
+                      >
+                        De stal heeft je een leasecontract aangeboden. Onderteken je deel
+                        hieronder; zodra alle partijen hebben getekend, wordt de lease actief.
+                      </p>
+                      <LeaseOndertekenActies
+                        horseId={horse.id}
+                        contractId={aangebodenLeaseContract.id}
+                        ondertekening={leesLeaseOndertekening(aangebodenLeaseContract.config)}
+                        minderjarig={
+                          leesLeaseContractConfig(aangebodenLeaseContract.config).berijder
+                            .minderjarig
+                        }
+                        magStal={false}
+                        magLeaser
+                      />
                     </div>
                   )}
 

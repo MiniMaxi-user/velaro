@@ -297,6 +297,7 @@ export default async function PaardDetailPage({ params }: Props) {
             contracts={contracten}
             opties={contractOpties}
             naleving={naleving}
+            currentUserId={user.id}
           />
         )
 

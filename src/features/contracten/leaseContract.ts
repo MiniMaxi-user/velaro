@@ -9,6 +9,7 @@ import {
   LEGE_VERZEKERING,
   type LeaseVerzekering,
 } from '../lease/leaseVerzekeringConfig'
+import type { Ondertekening } from '../lease/leaseContractConfig'
 
 // ── Lease-contractinhoud op Contract.config ([Unify 04] #130, [Unify 05] #131) ─
 // De rijke leasevelden van de unified contract-flow worden — net als de
@@ -193,6 +194,68 @@ export function leesLeaseContractConfig(
     },
     bijzonderheden: tekst(l.bijzonderheden),
   }
+}
+
+// ── Ondertekening op Contract.config.lease ([Unify 06] #132) ─────────────────
+// De meerpartijen-ondertekening (stal / leaser / voogd) wordt — net als in de oude
+// losse lease-flow (Lease.config.ondertekening) — append-only als JSON bewaard,
+// hier onder Contract.config.lease.ondertekening. De datavorm (Ondertekening per
+// partij) en de volledigheidsregel (isVolledigOndertekend) komen 1:1 uit de
+// bron-van-waarheid leaseContractConfig.ts; ze worden hier dus niet hertypt.
+
+export type LeaseOndertekening = {
+  stal: Ondertekening
+  leaser: Ondertekening
+  voogd: Ondertekening
+}
+
+export const LEGE_ONDERTEKENING: LeaseOndertekening = {
+  stal: null,
+  leaser: null,
+  voogd: null,
+}
+
+function leesEenOndertekening(v: unknown): Ondertekening {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const o = v as Record<string, unknown>
+  const naam = tekst(o.naam)
+  const datum = tekst(o.datum)
+  return naam && datum ? { naam, datum } : null
+}
+
+// Leest de ondertekening-status defensief uit Contract.config.lease.ondertekening.
+// Ontbrekende/onbekende blokken vallen terug op "nog niet ondertekend" (null).
+export function leesLeaseOndertekening(
+  config: Prisma.JsonValue | null | undefined,
+): LeaseOndertekening {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return { ...LEGE_ONDERTEKENING }
+  }
+  const lease = (config as Record<string, unknown>).lease
+  if (!lease || typeof lease !== 'object' || Array.isArray(lease)) {
+    return { ...LEGE_ONDERTEKENING }
+  }
+  const ond = (lease as Record<string, unknown>).ondertekening
+  if (!ond || typeof ond !== 'object' || Array.isArray(ond)) {
+    return { ...LEGE_ONDERTEKENING }
+  }
+  const r = ond as Record<string, unknown>
+  return {
+    stal: leesEenOndertekening(r.stal),
+    leaser: leesEenOndertekening(r.leaser),
+    voogd: leesEenOndertekening(r.voogd),
+  }
+}
+
+// Volledig ondertekend = stal én leaser getekend, plus de voogd wanneer de berijder
+// minderjarig is. `minderjarig` komt uit Contract.config.lease.berijder.minderjarig.
+export function isLeaseVolledigOndertekend(
+  ondertekening: LeaseOndertekening,
+  minderjarig: boolean,
+): boolean {
+  if (!ondertekening.stal || !ondertekening.leaser) return false
+  if (minderjarig && !ondertekening.voogd) return false
+  return true
 }
 
 // Of een leasevorm het "dagen per week"-veld kent. Alleen bij deellease is een vast

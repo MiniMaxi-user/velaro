@@ -76,6 +76,28 @@ export async function getAangebodenContractVoorEigenaar(
       horseId,
       status: 'AANGEBODEN',
       counterpartyUserId: userId,
+      // Alleen stalling: een aangeboden leasecontract kent een eigen ondertekenflow
+      // ([Unify 06] #132) i.p.v. de accepteer-/afwijs-actie van de eigenaar.
+      family: 'STALLING',
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+// Haalt het aan de leaser (wederpartij) aangeboden leasecontract voor een paard op
+// ([Unify 06] #132). Uitsluitend family=LEASE met status AANGEBODEN waarvan de
+// opgegeven gebruiker de wederpartij is, zodat de leaser in zijn weergave het te
+// ondertekenen leasecontract ziet. Geen aanbod → null.
+export async function getAangebodenLeaseContractVoorLeaser(
+  horseId: string,
+  userId: string,
+) {
+  return prisma.contract.findFirst({
+    where: {
+      horseId,
+      status: 'AANGEBODEN',
+      counterpartyUserId: userId,
+      family: 'LEASE',
     },
     orderBy: { createdAt: 'desc' },
   })
