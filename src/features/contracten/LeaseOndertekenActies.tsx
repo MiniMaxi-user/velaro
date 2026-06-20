@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react'
 import { signLeaseContract } from './actions'
 import { formatDatum } from '@/features/paarden/paardHelpers'
 
-// Eén ondertekening-status per partij (spiegelt Ondertekening uit leaseContractConfig).
+// Eén ondertekening-status per partij (spiegelt het Ondertekening-type uit leaseContract.ts).
 type Ondertekend = { naam: string; datum: string } | null
 
 // Ondertekening-blokken voor een aangeboden leasecontract binnen de unified

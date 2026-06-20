@@ -9,7 +9,9 @@ import {
   LEGE_VERZEKERING,
   type LeaseVerzekering,
 } from '../lease/leaseVerzekeringConfig'
-import type { Ondertekening } from '../lease/leaseContractConfig'
+// Ondertekening-vorm (naam+datum of null). Voorheen geïmporteerd uit de inmiddels
+// verwijderde leaseContractConfig.ts; nu hier de bron-van-waarheid ([Unify 08] #134).
+export type Ondertekening = { naam: string; datum: string } | null
 
 // ── Lease-contractinhoud op Contract.config ([Unify 04] #130, [Unify 05] #131) ─
 // De rijke leasevelden van de unified contract-flow worden — net als de
@@ -200,8 +202,7 @@ export function leesLeaseContractConfig(
 // De meerpartijen-ondertekening (stal / leaser / voogd) wordt — net als in de oude
 // losse lease-flow (Lease.config.ondertekening) — append-only als JSON bewaard,
 // hier onder Contract.config.lease.ondertekening. De datavorm (Ondertekening per
-// partij) en de volledigheidsregel (isVolledigOndertekend) komen 1:1 uit de
-// bron-van-waarheid leaseContractConfig.ts; ze worden hier dus niet hertypt.
+// partij) is hierboven gedefinieerd en is de bron-van-waarheid voor de unified flow.
 
 export type LeaseOndertekening = {
   stal: Ondertekening

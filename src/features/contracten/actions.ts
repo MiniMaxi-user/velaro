@@ -822,8 +822,8 @@ export async function updateLeaseContract(
 // Scharnierpunt van het contract-unify-epic: hier ondertekenen de partijen (stal /
 // leaser / voogd) een aangeboden leasecontract binnen de unified contractweergave,
 // en bij volledige ondertekening ontstaat de operationele, ACTIEVE Lease (1:1 aan
-// het Contract). Dit reproduceert de oude losse `signLease`-flow
-// (features/lease/leaseActions.ts) maar dan familie-bewust op het Contract:
+// het Contract). Dit verving de oude losse `signLease`-flow (inmiddels verwijderd,
+// [Unify 08] #134) maar dan familie-bewust op het Contract:
 //   - per-partij autorisatie (stal = OWNER/STAFF; leaser/voogd = wederpartij);
 //   - append-only ondertekening op Contract.config.lease.ondertekening;
 //   - volledigheid via isLeaseVolledigOndertekend (= isVolledigOndertekend-regel);

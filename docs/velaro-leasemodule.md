@@ -47,6 +47,31 @@ een **kloppend contract** en **transparante kosten/aansprakelijkheid** in één 
 signed-URL-opslag, `Message`/`MessageRead`, notificatiebel, detail-tab-layout,
 `panel`/`badge`/`filter-bar`-componenten.
 
+## 3a. Unified contractsysteem (contract-unify-epic #126) — actuele werking
+
+> Vanaf juni 2026 is lease- en stallingcontractbeheer samengevoegd tot **één
+> contractsysteem**. Onderstaande beschrijft de **actuele** werking; de oude losse
+> lease-contract-/kosten-/verzekering-editor onder `/lease/[leaseId]/…` bestaat niet
+> meer (opgeruimd in `[Unify 08]` #134).
+
+- **Eén stepper, één model.** Een leasecontract (`Contract.family = LEASE`) wordt
+  opgesteld, ondertekend en geactiveerd via **dezelfde unified contract-stepper** als
+  een stallingcontract, onder de **Contracten-tab** van het paardprofiel. De rijke
+  leasevelden (gebruiksrecht, kosten, verzekering, ondertekening) leven als JSON op
+  `Contract.config.lease` — het patroon spiegelt de stalling-optieblokken.
+- **De Lease-tab is puur marktplaats-aanbod.** De Lease-tab toont uitsluitend het
+  marktplaats-/listing-aanbod (aanbieden, filteren, matching, interesse/inquiry). Er
+  wordt daar **geen** contract meer opgesteld of beheerd.
+- **De operationele `Lease` ontstaat bij activatie.** Bij volledige ondertekening en
+  activatie van een `LEASE`-contract brengt het systeem **1:1** een operationele,
+  `ACTIEF`-`Lease` voort (gekoppeld via `Lease.contractId`). Die `Lease` is de bron
+  voor leaser-leestoegang, de gedeelde kalender en de mijlpaal-/notificatiemotor.
+  Er bestaat **geen UI meer** om een losse `Lease` zónder contract aan te maken.
+- **Behouden, herbruikte configs:** `leaseKostenConfig.ts` (`KOSTENPOSTEN`,
+  `berekenKosten`) en `leaseVerzekeringConfig.ts` (`leesVerzekering`,
+  `magActiverenVerzekering`, polislabels) worden door de unified contract-flow
+  hergebruikt. Het `Ondertekening`-type leeft in `features/contracten/leaseContract.ts`.
+
 ## 4. Contractstructuur (FNRS-artikelstructuur) — voor Lease 06
 
 Verplichte/aankruisbare onderdelen van een leasecontract (consistent in FNRS- en
