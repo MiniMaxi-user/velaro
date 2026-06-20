@@ -1194,6 +1194,16 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
 }
 
+/* Een paneel met een geopende "Nieuw contract"-dropdown (#137): de dropdown is
+   position:absolute binnen de panel-header en zou door de standaard
+   overflow:hidden van het paneel worden afgekapt. Alleen wanneer de dropdown
+   open is staan we overflow toe, zodat de lijst volledig zichtbaar blijft. In
+   de gesloten toestand behoudt het paneel overflow:hidden, dus de afgeronde
+   hoeken en de tabel-clipping elders blijven ongewijzigd. */
+.panel:has(.nieuw-contract-menu--open) {
+  overflow: visible;
+}
+
 .panel-header {
   padding: 14px 18px;
   border-bottom: 1px solid var(--velaro-color-border);
