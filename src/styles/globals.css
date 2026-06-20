@@ -1081,6 +1081,80 @@ a { color: inherit; text-decoration: none; }
   visibility: visible;
 }
 
+/* "Nieuw contract"-dropdown ([Unify 03] #129) */
+.nieuw-contract-menu {
+  position: relative;
+  display: inline-flex;
+}
+.nieuw-contract-chevron {
+  margin-left: 6px;
+  transition: transform 0.15s ease;
+}
+.nieuw-contract-menu--open .nieuw-contract-chevron {
+  transform: rotate(180deg);
+}
+.nieuw-contract-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: var(--velaro-color-surf-1);
+  border: 1px solid var(--velaro-color-border-strong);
+  border-radius: var(--velaro-radius-lg);
+  box-shadow: var(--velaro-shadow-lg);
+  padding: 6px;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.nieuw-contract-menu--open .nieuw-contract-dropdown {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.nieuw-contract-groep + .nieuw-contract-groep {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--velaro-color-border);
+}
+.nieuw-contract-groep__titel {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--velaro-color-gold-2);
+  font-weight: 600;
+}
+.nieuw-contract-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--velaro-radius-md);
+  font-family: var(--velaro-font-sans);
+  font-size: var(--velaro-text-sm);
+  color: var(--velaro-color-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: var(--velaro-transition);
+  text-align: left;
+}
+.nieuw-contract-item:hover {
+  background: var(--velaro-color-bg);
+}
+.nieuw-contract-item--disabled {
+  color: var(--velaro-color-muted);
+  cursor: default;
+}
+.nieuw-contract-item--disabled:hover {
+  background: transparent;
+}
+
 .label {
   display: inline-block;
   font-size: 10px;

@@ -12,8 +12,8 @@ import {
 import { heeftBerijder, leesBerijder } from './berijder'
 import { isMinderjarig } from '@/features/paarden/paardHelpers'
 import type { NalevingRegel } from './queries'
-import NieuwContractKnop from './NieuwContractKnop'
-import type { ContractPoort } from './relatietypeMatching'
+import NieuwContractDropdown from './NieuwContractDropdown'
+import type { ContractOptiesPerFamilie } from './relatietypeMatching'
 import ContractActies, { type VerlengContext } from './ContractActies'
 import { ontbrekendeAanbiedVelden } from './aanbiedValidatie'
 import { leesVersieGroepId } from './statusMachine'
@@ -93,14 +93,14 @@ function groepeerVersies(contracts: ContractRow[]): {
 export default function ContractenPanel({
   horseId,
   contracts,
-  poort,
+  opties,
   naleving = {},
 }: {
   horseId: string
   contracts: ContractRow[]
-  // Poort (#113): bepaalt of "Nieuw stallingscontract" mogelijk is op basis van
-  // relatietype, stallingsvorm en of er een eigenaar gekoppeld is.
-  poort: ContractPoort
+  // Contractopties ([Unify 03] #129): stalling + alle leasevormen, per familie
+  // gegroepeerd, met per optie of die mogelijk is (en zo niet, met welke reden).
+  opties: ContractOptiesPerFamilie[]
   // Per contract-id de nalevingsregels (STAL-07). Lege/ontbrekende lijst = geen
   // actieve gezondheidsplicht om te tonen.
   naleving?: Record<string, NalevingRegel[]>
@@ -109,7 +109,7 @@ export default function ContractenPanel({
     <div className="panel">
       <div className="panel-header">
         <span className="panel-title">Contracten</span>
-        <NieuwContractKnop horseId={horseId} poort={poort} />
+        <NieuwContractDropdown horseId={horseId} opties={opties} />
       </div>
       <div className="panel-body">
         {contracts.length === 0 ? (

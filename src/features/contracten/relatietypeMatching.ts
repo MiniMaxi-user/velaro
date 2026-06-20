@@ -1,4 +1,9 @@
-import type { ContractFamily, HorseRelatietype, HorseStallingsvorm } from '@prisma/client'
+import type {
+  ContractFamily,
+  HorseRelatietype,
+  HorseStallingsvorm,
+  LeaseType,
+} from '@prisma/client'
 
 // ── Contract-matching op basis van relatietype (#105) ────────────────────────
 //
@@ -32,10 +37,12 @@ export type RelatietypeMatch = {
 
 // Informatieve indicatieteksten (Nederlands, UI). Centraal zodat ze testbaar en
 // herbruikbaar zijn.
+// Sinds het contract-unify-epic (#126) is lease een volwaardige contractfamilie
+// (ContractFamily.LEASE) met een eigen opstel-flow; de oude "epic #59 — nog niet
+// beschikbaar"-indicatie is daarmee vervallen en bewust verwijderd.
 export const MATCH_INDICATIE = {
   LES: 'Geen/intern contract.',
   OPDRACHT_BEMIDDELING: 'Opdracht/bemiddeling — nog niet ondersteund.',
-  LEASE: 'Leasecontract via lease-module (epic #59) — nog niet beschikbaar.',
 } as const
 
 // Afbeelding relatietype → match. Volledig voor elke `HorseRelatietype`-waarde uit
@@ -47,10 +54,12 @@ const RELATIETYPE_MATCH: Record<HorseRelatietype, RelatietypeMatch> = {
     voorselectie: { family: 'STALLING', type: 'FULL_PENSION' },
     indicatie: null,
   },
-  // Leasepaard: geen voorselectie; lease-contractmatching hoort in de lease-module (#59).
+  // Leasepaard: geen stalling-voorselectie. Lease is sinds het contract-unify-epic
+  // een eigen contractfamilie met eigen opstel-flow (zie bepaalContractOpties),
+  // dus hier geen aparte indicatie meer.
   LEASEPAARD: {
     voorselectie: null,
-    indicatie: MATCH_INDICATIE.LEASE,
+    indicatie: null,
   },
   // Lespaard / manegepaard: intern, geen extern stallingscontract.
   LESPAARD: {
@@ -161,4 +170,136 @@ export function bepaalContractPoort(params: {
   if (!heeftEigenaar) return { toegestaan: false, reden: POORT_REDEN.GEEN_EIGENAAR }
 
   return { toegestaan: true, voorselectie: { family: 'STALLING', type } }
+}
+
+// ── Per-optie poort: alle contractopties met redenen ([Unify 03] #129) ────────
+//
+// De "Nieuw contract"-dropdown toont alle contractopties (stalling + alle
+// leasevormen) tegelijk, waarbij niet-mogelijke opties zichtbaar maar uitgeschakeld
+// zijn met een leesbare reden. Deze functie levert die opties als zuivere,
+// testbare afbeelding (geen side effects, geen DB-toegang).
+//
+// Stalling-opties hergebruiken `bepaalContractPoort` zodat het stalling-gedrag
+// identiek blijft. Lease-opties volgen de bestaande createLease-conventie: ze zijn
+// toegestaan zodra er een eigenaar aan het paard gekoppeld is (de leaser wordt pas
+// in de opstel-flow gekozen). Er komt bewust geen relatietype- of listing-eis bij.
+
+// Redenen waarom een lease-optie (nog) niet kan (Nederlands, UI). Centraal zodat
+// ze testbaar en herbruikbaar zijn.
+export const LEASE_POORT_REDEN = {
+  GEEN_EIGENAAR: 'Koppel eerst een eigenaar aan het paard.',
+} as const
+
+// Eén contractoptie in de dropdown: een concrete family + type, plus de
+// poort-uitkomst (toegestaan met voorselectie, of dicht met reden). Het Nederlandse
+// label wordt bewust niet hier bepaald maar in de UI opgehaald uit
+// CONTRACT_TYPE_LABELS/LEASE_TYPE_LABELS (bron van waarheid), zodat deze module geen
+// UI-labelafhankelijkheid kent en zuiver/testbaar blijft.
+export type ContractOptie = {
+  family: ContractFamily
+  type: string
+} & (
+  | { toegestaan: true; voorselectie: ContractVoorselectie }
+  | { toegestaan: false; reden: string }
+)
+
+// De opties gegroepeerd per familie, in presentatievolgorde. Lege groepen komen
+// niet voor (stalling en lease hebben altijd hun vaste opties). Het groep-label
+// (CONTRACT_FAMILY_LABELS) wordt in de UI opgehaald.
+export type ContractOptiesPerFamilie = {
+  family: ContractFamily
+  opties: ContractOptie[]
+}
+
+// Presentatievolgorde van de leasevormen, compile-compleet over `LeaseType` zodat
+// een toekomstige enum-uitbreiding hier een fout geeft. De Nederlandse labels staan
+// in LEASE_TYPE_LABELS (leaseHelpers.ts) en worden in de UI opgehaald.
+const LEASE_TYPE_VOLGORDE_MAP: Record<LeaseType, true> = {
+  FULL: true,
+  DEEL: true,
+  BIJRIJDEN: true,
+  WEDSTRIJD: true,
+  KOOPOPTIE: true,
+  FOK: true,
+}
+const LEASE_TYPE_VOLGORDE = Object.keys(LEASE_TYPE_VOLGORDE_MAP) as LeaseType[]
+
+// De ondersteunde stalling-contracttypes in presentatievolgorde, met de
+// stallingsvorm waar elk type bij hoort (sluit aan op STALLINGSVORM_CONTRACTTYPE:
+// volledig pension → FULL_PENSION, halfpension → HALF_PENSION).
+const STALLING_CONTRACTTYPES: { type: string; bijStallingsvorm: HorseStallingsvorm }[] = [
+  { type: 'FULL_PENSION', bijStallingsvorm: 'VOLLEDIG_PENSION' },
+  { type: 'HALF_PENSION', bijStallingsvorm: 'HALFPENSION' },
+]
+
+// Bepaalt voor één concreet stalling-contracttype of de poort open is. Hergebruikt
+// `bepaalContractPoort` met de werkelijke stallingsvorm van het paard, zodat het
+// stalling-gedrag identiek blijft aan vandaag: alleen het type dat bij de
+// stallingsvorm van het paard hoort kan open staan. De andere stalling-optie wordt
+// getoond maar uitgeschakeld met de stallingsvorm-reden — geen regressie in welke
+// optie kan, welke reden en welke route.
+function stallingOptie(
+  type: string,
+  bijStallingsvorm: HorseStallingsvorm,
+  params: {
+    relatietype: HorseRelatietype | null | undefined
+    stallingsvorm: HorseStallingsvorm | null | undefined
+    heeftEigenaar: boolean
+  },
+): ContractOptie {
+  const poort = bepaalContractPoort({
+    relatietype: params.relatietype,
+    stallingsvorm: params.stallingsvorm,
+    heeftEigenaar: params.heeftEigenaar,
+  })
+
+  // De poort kan hooguit het type van de werkelijke stallingsvorm openzetten. Een
+  // optie waarvan het type niet bij de stallingsvorm van het paard hoort, is altijd
+  // dicht — met de stallingsvorm-reden als de poort verder open zou zijn.
+  if (poort.toegestaan && params.stallingsvorm === bijStallingsvorm) {
+    return { family: 'STALLING', type, toegestaan: true, voorselectie: poort.voorselectie }
+  }
+  const reden = poort.toegestaan ? POORT_REDEN.STALLINGSVORM_NIET_ONDERSTEUND : poort.reden
+  return { family: 'STALLING', type, toegestaan: false, reden }
+}
+
+// Bepaalt voor één leasevorm of de poort open is. Volgt de bestaande
+// createLease-conventie: toegestaan zodra er een eigenaar gekoppeld is.
+function leaseOptie(
+  leaseType: LeaseType,
+  params: { heeftEigenaar: boolean },
+): ContractOptie {
+  if (!params.heeftEigenaar) {
+    return {
+      family: 'LEASE',
+      type: leaseType,
+      toegestaan: false,
+      reden: LEASE_POORT_REDEN.GEEN_EIGENAAR,
+    }
+  }
+  return {
+    family: 'LEASE',
+    type: leaseType,
+    toegestaan: true,
+    voorselectie: { family: 'LEASE', type: leaseType },
+  }
+}
+
+// Bepaalt alle contractopties (stalling + alle leasevormen) voor een paard, per
+// familie gegroepeerd. Zuivere functie zonder side effects; geschikt voor de
+// dropdown (optie in-/uitschakelen + reden) en testbaar per uitkomst.
+export function bepaalContractOpties(params: {
+  relatietype: HorseRelatietype | null | undefined
+  stallingsvorm: HorseStallingsvorm | null | undefined
+  heeftEigenaar: boolean
+}): ContractOptiesPerFamilie[] {
+  const stalling = STALLING_CONTRACTTYPES.map(({ type, bijStallingsvorm }) =>
+    stallingOptie(type, bijStallingsvorm, params),
+  )
+  const lease = LEASE_TYPE_VOLGORDE.map((lt) => leaseOptie(lt, params))
+
+  return [
+    { family: 'STALLING', opties: stalling },
+    { family: 'LEASE', opties: lease },
+  ]
 }

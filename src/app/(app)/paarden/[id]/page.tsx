@@ -32,7 +32,7 @@ import {
   verwerkTijdgebondenOvergangen,
 } from '@/features/contracten/actions'
 import ContractenPanel from '@/features/contracten/ContractenPanel'
-import { bepaalContractPoort } from '@/features/contracten/relatietypeMatching'
+import { bepaalContractOpties } from '@/features/contracten/relatietypeMatching'
 import { getPaardFotoSignedUrl } from '@/features/paarden/paardFotoStorage'
 
 interface Props {
@@ -280,10 +280,12 @@ export default async function PaardDetailPage({ params }: Props) {
 
         const heeftEigenaar = horse.people.some((p) => p.isOwner)
 
-        // Poort (#113): een stallingscontract kan pas worden aangemaakt wanneer
-        // relatietype = pensionpaard, stallingsvorm ∈ {volledig pension, halfpension}
-        // én er een eigenaar gekoppeld is. De stallingsvorm bepaalt het contracttype.
-        const contractPoort = bepaalContractPoort({
+        // Contractopties ([Unify 03] #129): de "Nieuw contract"-dropdown toont
+        // stalling (poort #113: relatietype = pensionpaard, stallingsvorm ∈ {volledig
+        // pension, halfpension} én een eigenaar gekoppeld) en alle leasevormen
+        // (toegestaan zodra er een eigenaar gekoppeld is). Niet-mogelijke opties
+        // blijven zichtbaar met een reden.
+        const contractOpties = bepaalContractOpties({
           relatietype: horse.relatietype,
           stallingsvorm: horse.stallingsvorm,
           heeftEigenaar,
@@ -293,7 +295,7 @@ export default async function PaardDetailPage({ params }: Props) {
           <ContractenPanel
             horseId={id}
             contracts={contracten}
-            poort={contractPoort}
+            opties={contractOpties}
             naleving={naleving}
           />
         )
