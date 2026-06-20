@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useActionState } from 'react'
+import { useState, useEffect, useActionState } from 'react'
 import type { Horse } from '@prisma/client'
 import { createHorse, updateHorse } from './actions'
 import {
@@ -17,7 +17,9 @@ interface Props {
   horse?: Horse
 }
 
-type State = { error?: string }
+// Veldgebonden fout (`fieldError`) wordt bij het betreffende veld getoond;
+// `error` blijft als vangnet-balk voor niet-veld-gebonden fouten.
+type State = { error?: string; fieldError?: { field: string; message: string }; submittedAt?: number }
 
 export default function PaardForm({ horse }: Props) {
   const serverAction = horse ? updateHorse.bind(null, horse.id) : createHorse
@@ -30,11 +32,39 @@ export default function PaardForm({ horse }: Props) {
       return {}
     } catch (e) {
       if ((e as { digest?: string }).digest?.startsWith('NEXT_REDIRECT')) throw e
-      return { error: (e as Error).message }
+      const raw = (e as Error).message
+      // Veldgebonden fout? De server codeert die als JSON { field, message }.
+      try {
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed.field === 'string' && typeof parsed.message === 'string') {
+          return { fieldError: parsed, submittedAt: Date.now() }
+        }
+      } catch {
+        // Geen JSON → generieke fout.
+      }
+      return { error: raw, submittedAt: Date.now() }
     }
   }
 
   const [state, formAction] = useActionState(action, {})
+  const fieldError = state.fieldError
+
+  // Helpers om een veldfout aan het juiste veld te koppelen.
+  const errClass = (field: string) => (fieldError?.field === field ? ' is-error' : '')
+  const fieldMsg = (field: string) =>
+    fieldError?.field === field ? (
+      <div id={`${field}-error`} className="form-error">{fieldError.message}</div>
+    ) : null
+
+  // Scroll naar en focus het eerste foutieve veld na een mislukte poging.
+  useEffect(() => {
+    if (!fieldError?.field || !state.submittedAt) return
+    const el = document.getElementById(fieldError.field)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      ;(el as HTMLElement).focus({ preventScroll: true })
+    }
+  }, [fieldError?.field, state.submittedAt])
 
   return (
     <form action={formAction} className="form-card">
@@ -48,11 +78,14 @@ export default function PaardForm({ horse }: Props) {
         <div className="form-group form-grid--full">
           <label htmlFor="name" className="form-label">Naam *</label>
           <input
-            id="name" name="name" type="text" className="input"
+            id="name" name="name" type="text" className={`input${errClass('name')}`}
             placeholder="bv. Shadowfax"
             defaultValue={horse?.name ?? ''}
             required
+            aria-invalid={fieldError?.field === 'name' || undefined}
+            aria-describedby={fieldError?.field === 'name' ? 'name-error' : undefined}
           />
+          {fieldMsg('name')}
         </div>
 
         <div className="form-group">
@@ -137,11 +170,14 @@ export default function PaardForm({ horse }: Props) {
         <div className="form-group">
           <label htmlFor="chipNumber" className="form-label">Chipnummer</label>
           <input
-            id="chipNumber" name="chipNumber" type="text" className="input"
+            id="chipNumber" name="chipNumber" type="text" className={`input${errClass('chipNumber')}`}
             placeholder="15 cijfers (bv. 528246000XXXXXX)"
             defaultValue={horse?.chipNumber ?? ''}
             maxLength={20}
+            aria-invalid={fieldError?.field === 'chipNumber' || undefined}
+            aria-describedby={fieldError?.field === 'chipNumber' ? 'chipNumber-error' : undefined}
           />
+          {fieldMsg('chipNumber')}
         </div>
 
         <div className="form-group">

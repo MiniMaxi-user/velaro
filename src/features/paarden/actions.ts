@@ -18,9 +18,24 @@ async function getCurrentUser() {
   return user
 }
 
+/**
+ * Veldgebonden validatiefout. De `field` komt overeen met de `name` van het
+ * formulierveld in `PaardForm`, zodat de client de melding bij het juiste veld
+ * kan tonen (`.input.is-error` + `.form-error`). De message wordt JSON-gecodeerd
+ * zodat hij ongewijzigd door de bestaande server-action-throw/catch heen reist.
+ */
+class HorseFieldError extends Error {
+  field: string
+  constructor(field: string, message: string) {
+    super(JSON.stringify({ field, message }))
+    this.field = field
+    this.name = 'HorseFieldError'
+  }
+}
+
 function parseHorseFormData(formData: FormData) {
   const name = (formData.get('name') as string)?.trim()
-  if (!name) throw new Error('Naam is verplicht')
+  if (!name) throw new HorseFieldError('name', 'Naam is verplicht')
 
   const dateOfBirthStr = formData.get('dateOfBirth') as string
   const sexStr = formData.get('sex') as string
@@ -29,7 +44,10 @@ function parseHorseFormData(formData: FormData) {
   const chipNumberDigits = chipNumberRaw ? chipNumberRaw.replace(/\D/g, '') : null
   const chipNumber = chipNumberDigits || null
   if (chipNumber && chipNumber.length !== 15) {
-    throw new Error('Chipnummer moet exact 15 cijfers bevatten (spaties en streepjes worden automatisch verwijderd)')
+    throw new HorseFieldError(
+      'chipNumber',
+      'Chipnummer moet exact 15 cijfers bevatten (spaties en streepjes worden automatisch verwijderd)'
+    )
   }
 
   const excludedFromConsumption = formData.get('excludedFromConsumption') === 'true'
