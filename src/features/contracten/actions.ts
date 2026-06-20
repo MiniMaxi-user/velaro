@@ -729,15 +729,22 @@ function leesLeaseContractForm(
   }
 }
 
-// Maakt een concept-leasecontract aan op een paard. family=LEASE, type=leasevorm,
-// status=CONCEPT, currentVersion=1. De poort (eigenaar gekoppeld) wordt hier
-// server-side afgedwongen, zodat een directe aanroep zonder eigenaar wordt geweigerd.
-// Spiegelt createStallingContract; de wederpartij (leaser) wordt in de opstel-flow
-// gekozen, dus hier nog niet vereist.
+// Maakt een concept-leasecontract aan op een paard en stuurt door naar de bewerk-
+// stepper. family=LEASE, type=leasevorm, status=CONCEPT, currentVersion=1. De poort
+// (eigenaar gekoppeld) wordt hier server-side afgedwongen, zodat een directe aanroep
+// zonder eigenaar wordt geweigerd. Spiegelt createStallingContract; de wederpartij
+// (leaser) wordt in de opstel-flow gekozen, dus hier nog niet vereist.
+//
+// Deze action wordt als formulier-action aangeroepen (bij submit), niet tijdens de
+// render (#138). Daardoor draaien `revalidatePath` en `redirect` op het juiste moment:
+// `revalidatePath` tijdens een render is door Next.js niet toegestaan en veroorzaakte
+// eerder de serverfout ("revalidatePath ... used during render which is unsupported").
+// Als form-action wordt deze functie (na .bind van horseId + leasevorm) door React met
+// een FormData-argument aangeroepen; dat argument is hier niet nodig en wordt genegeerd.
 export async function createLeaseContract(
   horseId: string,
   leaseTypeRaw: string,
-): Promise<string> {
+): Promise<void> {
   const { horse } = await getAuthorizedStaff(horseId)
   const leaseType = leesLeaseType(leaseTypeRaw)
 
@@ -763,7 +770,7 @@ export async function createLeaseContract(
   })
 
   revalidatePath(`/paarden/${horseId}`)
-  return contract.id
+  redirect(`/paarden/${horseId}/contracten/${contract.id}/bewerken`)
 }
 
 // Werkt de basis- en inhoudelijke velden van een concept-leasecontract bij. Bewaart

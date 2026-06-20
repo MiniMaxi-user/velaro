@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth/session'
 import { getHorse } from '@/features/paarden/queries'
 import { getStableRole } from '@/lib/auth/authorization'
 import ContractForm from '@/features/contracten/ContractForm'
+import LeaseContractStart from '@/features/contracten/LeaseContractStart'
 import { createStallingContract, createLeaseContract } from '@/features/contracten/actions'
 import { bepaalContractPoort } from '@/features/contracten/relatietypeMatching'
 import { LEASE_TYPE_LABELS } from '@/features/lease/leaseHelpers'
@@ -28,11 +29,15 @@ export default async function NieuwContractPage({ params, searchParams }: Props)
 
   const eigenaren = horse.people.filter((p) => p.isOwner)
 
-  // ── Lease-tak ([Unify 04] #130) ────────────────────────────────────────────
+  // ── Lease-tak ([Unify 04] #130, bugfix #138) ───────────────────────────────
   // De "Nieuw contract"-dropdown (#129) routeert een gekozen leasevorm hierheen via
-  // ?family=LEASE&type=<leaseType>. We valideren de leasevorm, herbevestigen de
-  // lease-poort server-side (eigenaar gekoppeld), maken een concept-leasecontract aan
-  // en sturen door naar de bewerk-stepper. De stalling-tak hieronder blijft ongewijzigd.
+  // ?family=LEASE&type=<leaseType>. We valideren de leasevorm en herbevestigen de
+  // lease-poort server-side (eigenaar gekoppeld). Het concept-leasecontract wordt
+  // echter NIET tijdens de render aangemaakt: createLeaseContract roept revalidatePath
+  // aan, wat Next.js tijdens een render niet toestaat (en de pagina liet crashen, #138).
+  // In plaats daarvan renderen we een auto-submittend formulier dat de action bij submit
+  // uitvoert — buiten de render — en daarna naar de bewerk-stepper redirect. Zo is het
+  // eindgedrag gelijk aan de stalling-flow. De stalling-tak hieronder blijft ongewijzigd.
   if (family === 'LEASE') {
     // Valideer de leasevorm tegen de bron van waarheid (LEASE_TYPE_LABELS).
     if (!type || !(type in LEASE_TYPE_LABELS)) {
@@ -43,10 +48,10 @@ export default async function NieuwContractPage({ params, searchParams }: Props)
     if (eigenaren.length === 0) {
       redirect(`/paarden/${id}?tab=contracten`)
     }
-    // Maak het concept aan en stuur door naar de bewerk-stepper. createLeaseContract
-    // dwingt de poort nogmaals server-side af.
-    const contractId = await createLeaseContract(id, type)
-    redirect(`/paarden/${id}/contracten/${contractId}/bewerken`)
+    // createLeaseContract (gebonden aan paard + leasevorm) maakt bij submit het concept
+    // aan, dwingt de eigenaar-poort nogmaals server-side af en redirect naar de stepper.
+    const leaseStartAction = createLeaseContract.bind(null, id, type)
+    return <LeaseContractStart action={leaseStartAction} />
   }
 
   // ── Stalling-tak (ongewijzigd) ─────────────────────────────────────────────
