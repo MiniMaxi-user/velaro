@@ -81,17 +81,19 @@ export default async function BewerkContractPage({ params }: Props) {
     ? new Date(contract.startDate).toISOString().slice(0, 10)
     : undefined
 
-  // ── Lease-tak ([Unify 04] #130) ────────────────────────────────────────────
+  // ── Lease-tak ([Unify 04] #130, [Unify 05] #131) ───────────────────────────
   // Een leasecontract gebruikt dezelfde stepper-UX als stalling, maar met de
-  // lease-blokken (LeaseContractStepperForm) en opslag op config.lease. Geen
-  // bijlagen/voederschema/huisvesting hier — die horen bij stalling. De disclaimer-
-  // banner blijft zichtbaar. Kosten/verzekering vallen buiten deze story (#131).
+  // lease-blokken (LeaseContractStepperForm) en opslag op config.lease — inclusief
+  // de Kosten- en Verzekering & aansprakelijkheid-blokken (#131). De disclaimer-
+  // banner blijft zichtbaar. De verzekeringspolis loopt via het bestaande bijlagen-
+  // mechanisme (categorie VERZEKERINGSPOLIS), net als bij stalling.
   if (isLease) {
     const leaseType = (
       contract.type in LEASE_TYPE_LABELS ? contract.type : 'FULL'
     ) as LeaseType
     const lease = leesLeaseContractConfig(contract.config)
     const leaseAction = updateLeaseContract.bind(null, id, contractId)
+    const leaseBijlagen = await getBijlagenVoorContract(contractId)
 
     return (
       <main className="page-container">
@@ -122,6 +124,17 @@ export default async function BewerkContractPage({ params }: Props) {
           defaultStartDate={defaultStartDate}
           lease={lease}
           submitLabel="Wijzigingen opslaan"
+        />
+
+        {/* Verzekeringspolis (en evt. andere bijlagen) via het bestaande mechanisme. */}
+        <BijlagenBeheer
+          horseId={id}
+          contractId={contractId}
+          bijlagen={leaseBijlagen.map((b) => ({
+            id: b.id,
+            categorie: b.categorie,
+            bestandsnaam: b.bestandsnaam,
+          }))}
         />
       </main>
     )

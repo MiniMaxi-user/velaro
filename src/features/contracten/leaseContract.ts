@@ -1,12 +1,25 @@
 import type { LeaseType, Prisma } from '@prisma/client'
+import {
+  leesLeaseKosten,
+  legeLeaseKosten,
+  type LeaseKosten,
+} from '../lease/leaseKostenConfig'
+import {
+  leesVerzekering,
+  LEGE_VERZEKERING,
+  type LeaseVerzekering,
+} from '../lease/leaseVerzekeringConfig'
 
-// ── Lease-contractinhoud op Contract.config ([Unify 04] #130) ────────────────
+// ── Lease-contractinhoud op Contract.config ([Unify 04] #130, [Unify 05] #131) ─
 // De rijke leasevelden van de unified contract-flow worden — net als de
 // stalling-optieblokken (huisvesting/prijsLooptijd/…) — als JSON op
 // Contract.config bewaard, onder de sleutel `lease`. Géén Lease-rij in deze story:
-// die ontstaat pas bij activatie ([Unify 06] #132). De configvorm is bewust een
-// projectie van LeaseContractConfig (leaseContractConfig.ts) zónder de kosten- en
-// verzekering/aansprakelijkheid-velden; die verhuizen naar [Unify 05] #131.
+// die ontstaat pas bij activatie ([Unify 06] #132). De configvorm spiegelt de
+// losse lease-bron-van-waarheid: het Kosten-blok hergebruikt LeaseKosten /
+// berekenKosten (leaseKostenConfig.ts), het Verzekering-blok hergebruikt
+// LeaseVerzekering / magActiverenVerzekering (leaseVerzekeringConfig.ts). De polis
+// loopt via het bestaande bijlagen-mechanisme (categorie VERZEKERINGSPOLIS), niet
+// via het `polissen`-veld van LeaseVerzekering — dat blijft hier dus leeg.
 //
 // Defensief lezen met lege standaarden, zodat het formulier altijd een volledige
 // set velden heeft. Spiegelt het patroon van huisvesting.ts / prijsLooptijd.ts.
@@ -22,8 +35,16 @@ export type LeaseContractStepperConfig = {
   // Aantal dagen per week (alleen relevant bij DEEL-lease).
   dagenPerWeek: number | null
 
-  // Leasevergoeding (vrije tekst in deze story; #131 maakt kosten gestructureerd).
-  leasevergoeding: string | null
+  // Kosten & leasevergoeding ([Unify 05] #131). Gestructureerd via LeaseKosten
+  // (kostenverdeling per post + vergoeding excl. btw + 21%-btw-toggle). Vervangt
+  // het vrije-tekstveld `leasevergoeding` van #130 (geen dubbel begrip in de
+  // stepper). Berekening: berekenKosten (leaseKostenConfig.ts).
+  kosten: LeaseKosten
+
+  // Verzekering & aansprakelijkheid 6:179 BW ([Unify 05] #131). Hergebruikt
+  // LeaseVerzekering; het `polissen`-veld blijft leeg — de polis loopt via het
+  // bijlagen-mechanisme (categorie VERZEKERINGSPOLIS). Gate: magActiverenVerzekering.
+  verzekering: LeaseVerzekering
 
   // Looptijd / proefperiode / opzegging.
   looptijd: {
@@ -63,7 +84,8 @@ export const LEGE_LEASE_CONTRACT: LeaseContractStepperConfig = {
   gebruiksrecht: null,
   disciplines: null,
   dagenPerWeek: null,
-  leasevergoeding: null,
+  kosten: legeLeaseKosten(),
+  verzekering: { ...LEGE_VERZEKERING, polissen: [] },
   looptijd: {
     einddatum: null,
     minimumTermijnMaanden: null,
@@ -133,11 +155,22 @@ export function leesLeaseContractConfig(
   const proefActief = proefRaw.actief === true
   const minderjarig = berijderRaw.minderjarig === true
 
+  // Kosten & verzekering hergebruiken de bestaande readers, die respectievelijk
+  // `.kosten` en `.verzekeringBlok` van het meegegeven object lezen. We voeden ze
+  // de bijbehorende sub-objecten uit config.lease zodat de bron-van-waarheid niet
+  // hertypt wordt. De polissen lopen via het bijlagen-mechanisme, dus we negeren
+  // het `polissen`-veld van de verzekering-reader bewust.
+  const kosten = leesLeaseKosten({ kosten: l.kosten as Prisma.JsonValue })
+  const verzekeringRuw = leesVerzekering({
+    verzekeringBlok: l.verzekering as Prisma.JsonValue,
+  })
+
   return {
     gebruiksrecht: tekst(l.gebruiksrecht),
     disciplines: tekst(l.disciplines),
     dagenPerWeek: getal(l.dagenPerWeek),
-    leasevergoeding: tekst(l.leasevergoeding),
+    kosten,
+    verzekering: { ...verzekeringRuw, polissen: [] },
     looptijd: {
       einddatum: tekst(looptijdRaw.einddatum),
       minimumTermijnMaanden: getal(looptijdRaw.minimumTermijnMaanden),

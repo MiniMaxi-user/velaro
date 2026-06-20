@@ -3,6 +3,13 @@
 import { useState } from 'react'
 import type { LeaseType } from '@prisma/client'
 import { LEASE_TYPE_LABELS } from '../lease/leaseHelpers'
+import {
+  berekenKosten,
+  KOSTENPOSTEN,
+  LEASE_BTW_TARIEF,
+  type Betaler,
+} from '../lease/leaseKostenConfig'
+import { magActiverenVerzekering } from '../lease/leaseVerzekeringConfig'
 import ContractStepper, { Toggle, type StapDef } from './ContractStepper'
 import {
   kentDagenPerWeek,
@@ -11,6 +18,10 @@ import {
 } from './leaseContract'
 
 type OwnerOption = { userId: string; label: string }
+
+function euro(n: number): string {
+  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n)
+}
 
 // ── Lease-consument van de generieke stepper-schil ([Unify 04] #130) ──────────
 // Analoog aan ContractStepperForm (stalling): deze client-component houdt de
@@ -50,6 +61,45 @@ export default function LeaseContractStepperForm({
   const [proefActief, setProefActief] = useState<boolean>(lease.looptijd.proefperiode.actief)
   const [minderjarig, setMinderjarig] = useState<boolean>(lease.berijder.minderjarig)
   const [koopoptieActief, setKoopoptieActief] = useState<boolean>(lease.koop.koopoptie)
+
+  // ── Kosten-blok ([Unify 05] #131): client-state voor het afgeleide maandoverzicht.
+  // De berekening hergebruikt berekenKosten (bron van waarheid); we spiegelen de
+  // ingevulde waarden in state zodat het overzicht live meeloopt.
+  const [postBetaler, setPostBetaler] = useState<Record<string, Betaler>>(() =>
+    Object.fromEntries(KOSTENPOSTEN.map((p) => [p.key, lease.kosten.posten[p.key].betaler])),
+  )
+  const [postBedrag, setPostBedrag] = useState<Record<string, number | null>>(() =>
+    Object.fromEntries(KOSTENPOSTEN.map((p) => [p.key, lease.kosten.posten[p.key].bedrag])),
+  )
+  const [vergoeding, setVergoeding] = useState<number | null>(lease.kosten.vergoeding)
+  const [btw, setBtw] = useState<boolean>(lease.kosten.btw)
+
+  // ── Verzekering-blok ([Unify 05] #131): client-state voor de gate-indicatie.
+  const [meeverzekerd, setMeeverzekerd] = useState<'JA' | 'NEE' | null>(
+    lease.verzekering.meeverzekerd,
+  )
+  const [risicoBevestigd, setRisicoBevestigd] = useState<boolean>(
+    lease.verzekering.risicoBevestigd,
+  )
+
+  const berekening = berekenKosten({
+    vergoeding,
+    btw,
+    posten: Object.fromEntries(
+      KOSTENPOSTEN.map((p) => [
+        p.key,
+        { betaler: postBetaler[p.key], bedrag: postBedrag[p.key], onvoorzien: false },
+      ]),
+    ),
+  })
+
+  const magActiveren = magActiverenVerzekering({
+    meeverzekerd,
+    risicoAcceptatie: lease.verzekering.risicoAcceptatie,
+    dekkingOngevallen: lease.verzekering.dekkingOngevallen,
+    risicoBevestigd,
+    polissen: [],
+  })
 
   const ster = <span className="required">*</span>
 
@@ -170,28 +220,133 @@ export default function LeaseContractStepperForm({
       ),
     },
     {
-      id: 'stap-vergoeding',
-      naam: 'Leasevergoeding',
-      sub: 'De maandelijkse leasevergoeding',
-      verplicht: [{ naam: 'leasevergoeding' }],
+      id: 'stap-kosten',
+      naam: 'Kosten & leasevergoeding',
+      sub: 'Kostenverdeling per post + de leasevergoeding',
+      // Verplicht: de maandelijkse leasevergoeding (excl. btw). De kostenverdeling
+      // per post is optioneel (lege posten mogen).
+      verplicht: [{ naam: 'leaseVergoeding' }],
       render: () => (
-        <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="leasevergoeding" className="form-label">Leasevergoeding {ster}</label>
-            <input
-              id="leasevergoeding"
-              name="leasevergoeding"
-              type="text"
-              className="input"
-              placeholder="bijv. € 250 per maand"
-              defaultValue={lease.leasevergoeding ?? ''}
-            />
-            <span className="form-hint">
-              Kostenverdeling (hoefsmid, dierenarts, voer) komt in een volgend blok
-              (Kosten) zodra dat beschikbaar is.
-            </span>
+        <>
+          <div className="form-subblock-title">Kostenverdeling</div>
+          <table className="gezondheid-tabel">
+            <thead>
+              <tr>
+                <th>Post</th>
+                <th>Wie betaalt</th>
+                <th>Bedrag p/m</th>
+                <th>Onvoorzien</th>
+              </tr>
+            </thead>
+            <tbody>
+              {KOSTENPOSTEN.map((def) => (
+                <tr key={def.key}>
+                  <td>{def.label}</td>
+                  <td>
+                    <select
+                      name={`betaler_${def.key}`}
+                      className="input"
+                      value={postBetaler[def.key]}
+                      onChange={(e) =>
+                        setPostBetaler((s) => ({ ...s, [def.key]: e.target.value as Betaler }))
+                      }
+                    >
+                      <option value="EIGENAAR">Eigenaar</option>
+                      <option value="LEASER">Leaser</option>
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      name={`bedrag_${def.key}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="input"
+                      style={{ maxWidth: 120 }}
+                      value={postBedrag[def.key] ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value.trim()
+                        setPostBedrag((s) => ({
+                          ...s,
+                          [def.key]: v ? Number(v.replace(',', '.')) : null,
+                        }))
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <Toggle
+                      name={`onvoorzien_${def.key}`}
+                      label=""
+                      defaultChecked={lease.kosten.posten[def.key].onvoorzien}
+                      bare
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="form-grid" style={{ marginTop: 'var(--velaro-space-4)' }}>
+            <div className="form-group">
+              <label htmlFor="leaseVergoeding" className="form-label">
+                Leasevergoeding p/m (excl. btw) {ster}
+              </label>
+              <input
+                id="leaseVergoeding"
+                name="leaseVergoeding"
+                type="number"
+                min="0"
+                step="0.01"
+                className="input"
+                placeholder="bijv. 250"
+                value={vergoeding ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  setVergoeding(v ? Number(v.replace(',', '.')) : null)
+                }}
+              />
+            </div>
+
+            <div className="form-group" style={{ alignSelf: 'end' }}>
+              <Toggle
+                name="leaseBtw"
+                label="Btw 21% (lease is belast tegen het hoge tarief)"
+                defaultChecked={lease.kosten.btw}
+                onChange={(checked) => setBtw(checked)}
+              />
+            </div>
           </div>
-        </div>
+
+          {/* Afgeleid maandoverzicht (read-only) — berekenKosten als bron van waarheid. */}
+          <div className="form-subblock-title" style={{ marginTop: 'var(--velaro-space-6)' }}>
+            Maandoverzicht
+          </div>
+          <div className="form-grid">
+            <div className="detail-field">
+              <div className="detail-field-label">Subtotaal vergoeding</div>
+              <div className="detail-field-value">{euro(berekening.subtotaal)}</div>
+            </div>
+            <div className="detail-field">
+              <div className="detail-field-label">
+                Btw {btw ? `${Math.round(LEASE_BTW_TARIEF * 100)}%` : '—'}
+              </div>
+              <div className="detail-field-value">{euro(berekening.btwBedrag)}</div>
+            </div>
+            <div className="detail-field">
+              <div className="detail-field-label">Leaser betaalt p/m</div>
+              <div className="detail-field-value">
+                <strong>{euro(berekening.leaserMaand)}</strong>
+              </div>
+            </div>
+            <div className="detail-field">
+              <div className="detail-field-label">Eigenaar draagt p/m</div>
+              <div className="detail-field-value">{euro(berekening.eigenaarMaand)}</div>
+            </div>
+          </div>
+          <p className="form-hint" style={{ marginTop: 'var(--velaro-space-2)' }}>
+            Administratie/overzicht — echte incasso volgt met de facturatie-stap.
+          </p>
+        </>
       ),
     },
     {
@@ -394,6 +549,93 @@ export default function LeaseContractStepperForm({
             />
           </div>
         ),
+    },
+    {
+      id: 'stap-verzekering',
+      naam: 'Verzekering & aansprakelijkheid',
+      sub: 'Meeverzekerd-vraag + 6:179 BW-checklist',
+      // Verplicht: de meeverzekerd-vraag moet beantwoord zijn. De activatie-gate
+      // (meeverzekerd JA of risico bevestigd) wordt pas bij aanbieden/activeren hard
+      // afgedwongen (#132); hier leveren we de velden + de gate-indicatie.
+      verplicht: [{ naam: 'meeverzekerd' }],
+      render: () => (
+        <>
+          <p className="form-hint" style={{ marginBottom: 'var(--velaro-space-3)' }}>
+            De bezitter van een dier is aansprakelijk (art. 6:179 BW). Bij (deel)lease sluit dat
+            de leaser niet automatisch uit — leg de meeverzekering en risicoverdeling daarom vast.
+          </p>
+
+          <div className="form-group">
+            <div className="form-label">
+              Is de leaser meeverzekerd op de WA/AVP-polis van de eigenaar? {ster}
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--velaro-space-4)', marginTop: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="meeverzekerd"
+                  value="JA"
+                  checked={meeverzekerd === 'JA'}
+                  onChange={() => setMeeverzekerd('JA')}
+                />{' '}
+                Ja
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="meeverzekerd"
+                  value="NEE"
+                  checked={meeverzekerd === 'NEE'}
+                  onChange={() => setMeeverzekerd('NEE')}
+                />{' '}
+                Nee
+              </label>
+            </div>
+          </div>
+
+          <div
+            className="form-group"
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--velaro-space-2)' }}
+          >
+            <div className="form-label">6:179 BW-checklist</div>
+            <Toggle
+              name="risicoAcceptatie"
+              label="Partijen accepteren de risicoverdeling rond aansprakelijkheid (6:179 BW)."
+              defaultChecked={lease.verzekering.risicoAcceptatie}
+              bare
+            />
+            <Toggle
+              name="dekkingOngevallen"
+              label="Er is dekking voor ongevallen van de ruiter."
+              defaultChecked={lease.verzekering.dekkingOngevallen}
+              bare
+            />
+            <Toggle
+              name="risicoBevestigd"
+              label="Ik begrijp het risico (vereist wanneer de leaser niet meeverzekerd is)."
+              defaultChecked={lease.verzekering.risicoBevestigd}
+              onChange={(checked) => setRisicoBevestigd(checked)}
+              bare
+            />
+          </div>
+
+          <div className="form-group">
+            <span className={`badge ${magActiveren ? 'badge-success' : 'badge-warning'}`}>
+              {magActiveren ? 'Gereed voor activatie' : 'Aandacht nodig'}
+            </span>
+            <span className="form-hint" style={{ marginLeft: 'var(--velaro-space-3)' }}>
+              {magActiveren
+                ? 'De lease kan straks actief worden (meeverzekerd of risico bevestigd).'
+                : 'De lease kan niet actief worden tot de meeverzekerd-vraag "Ja" is óf het risico expliciet is bevestigd.'}
+            </span>
+          </div>
+
+          <p className="form-hint" style={{ marginTop: 'var(--velaro-space-2)' }}>
+            Koppel een kopie van de verzekeringspolis als bijlage (categorie &ldquo;Kopie
+            verzekeringspolis&rdquo;) onder dit formulier.
+          </p>
+        </>
+      ),
     },
     {
       id: 'stap-bijzonderheden',

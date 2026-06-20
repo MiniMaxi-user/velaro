@@ -87,6 +87,16 @@ import {
   kentKoopoptie,
   type LeaseContractStepperConfig,
 } from './leaseContract'
+import {
+  KOSTENPOSTEN,
+  type Betaler,
+  type KostenPost,
+  type LeaseKosten,
+} from '../lease/leaseKostenConfig'
+import {
+  type LeaseVerzekering,
+  type Meeverzekerd,
+} from '../lease/leaseVerzekeringConfig'
 import type { ContractStatus, LeaseType, Prisma } from '@prisma/client'
 
 // Leest de huisvesting-opties (STAL-03) uit het formulier. Onbekende boxtypes
@@ -584,6 +594,57 @@ function leesLeaseType(value: unknown): LeaseType {
   throw new Error('Onbekende leasevorm.')
 }
 
+// Leest het Kosten-blok ([Unify 05] #131) uit het formulier. Datavorm spiegelt
+// LeaseKosten (leaseKostenConfig.ts) zodat #132/#134 het 1:1 op de Lease kunnen
+// projecteren. Per kostenpost: betaler (eigenaar/leaser), bedrag p/m en de
+// onvoorzien-vlag; plus de leasevergoeding (excl. btw) met 21%-btw-toggle. Bedragen
+// worden server-side gevalideerd (niet-negatief). Lege bedragen mogen — de
+// compleetheid is een poort bij aanbieden, niet bij opslaan.
+function leesLeaseKostenForm(formData: FormData): LeaseKosten {
+  const posten: Record<string, KostenPost> = {}
+  for (const def of KOSTENPOSTEN) {
+    const betaler: Betaler =
+      formData.get(`betaler_${def.key}`) === 'LEASER' ? 'LEASER' : 'EIGENAAR'
+    const bedrag = leesNietNegatiefGetal(
+      formData.get(`bedrag_${def.key}`),
+      `Het bedrag voor ${def.label}`,
+    )
+    posten[def.key] = {
+      betaler,
+      bedrag,
+      onvoorzien: formData.get(`onvoorzien_${def.key}`) === 'true',
+    }
+  }
+
+  return {
+    vergoeding: leesNietNegatiefGetal(
+      formData.get('leaseVergoeding'),
+      'De leasevergoeding',
+    ),
+    btw: formData.get('leaseBtw') === 'true',
+    posten,
+  }
+}
+
+// Leest het Verzekering & aansprakelijkheid-blok ([Unify 05] #131) uit het
+// formulier. Datavorm spiegelt LeaseVerzekering (leaseVerzekeringConfig.ts); de
+// gate-helper magActiverenVerzekering bepaalt of de lease activeerbaar is. De polis
+// loopt via het bijlagen-mechanisme (categorie VERZEKERINGSPOLIS), dus het
+// `polissen`-veld blijft hier leeg.
+function leesLeaseVerzekeringForm(formData: FormData): LeaseVerzekering {
+  const meeverzekerdRaw = (formData.get('meeverzekerd') as string)?.trim()
+  const meeverzekerd: Meeverzekerd | null =
+    meeverzekerdRaw === 'JA' ? 'JA' : meeverzekerdRaw === 'NEE' ? 'NEE' : null
+
+  return {
+    meeverzekerd,
+    risicoAcceptatie: formData.get('risicoAcceptatie') === 'true',
+    dekkingOngevallen: formData.get('dekkingOngevallen') === 'true',
+    risicoBevestigd: formData.get('risicoBevestigd') === 'true',
+    polissen: [],
+  }
+}
+
 // Leest de lease-contractinhoud uit het formulier en valideert server-side. De
 // leasevorm bepaalt welke velden van toepassing zijn (dagen/week bij deellease,
 // koopoptie bij KOOPOPTIE-lease); niet-toepasselijke velden worden genormaliseerd
@@ -599,7 +660,13 @@ function leesLeaseContractForm(
     ? leesNietNegatiefGetal(formData.get('dagenPerWeek'), 'Het aantal dagen per week')
     : null
 
-  const leasevergoeding = (formData.get('leasevergoeding') as string)?.trim() || null
+  // Kosten ([Unify 05] #131): gestructureerde kostenverdeling per post + de
+  // leasevergoeding (excl. btw) met 21%-btw-toggle. Vervangt het vrije-tekstveld
+  // `leasevergoeding` van #130. Datavorm spiegelt LeaseKosten (leaseKostenConfig.ts).
+  const kosten = leesLeaseKostenForm(formData)
+  // Verzekering & aansprakelijkheid 6:179 BW ([Unify 05] #131). Datavorm spiegelt
+  // LeaseVerzekering; de polis loopt via het bijlagen-mechanisme, dus `polissen` blijft leeg.
+  const verzekering = leesLeaseVerzekeringForm(formData)
 
   const einddatum = (formData.get('looptijdEinddatum') as string)?.trim() || null
   const minimumTermijnMaanden = leesNietNegatiefGetal(
@@ -631,7 +698,8 @@ function leesLeaseContractForm(
     gebruiksrecht,
     disciplines,
     dagenPerWeek,
-    leasevergoeding,
+    kosten,
+    verzekering,
     looptijd: {
       einddatum,
       minimumTermijnMaanden,
