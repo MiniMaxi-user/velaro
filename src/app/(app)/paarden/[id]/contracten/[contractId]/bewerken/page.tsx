@@ -5,7 +5,11 @@ import { getHorse } from '@/features/paarden/queries'
 import { getStableRole } from '@/lib/auth/authorization'
 import { prisma } from '@/lib/prisma'
 import ContractStepperForm from '@/features/contracten/ContractStepperForm'
-import { updateStallingContract } from '@/features/contracten/actions'
+import LeaseContractStepperForm from '@/features/contracten/LeaseContractStepperForm'
+import { updateStallingContract, updateLeaseContract } from '@/features/contracten/actions'
+import { leesLeaseContractConfig } from '@/features/contracten/leaseContract'
+import { LEASE_TYPE_LABELS } from '@/features/lease/leaseHelpers'
+import type { LeaseType } from '@prisma/client'
 import { leesHuisvesting } from '@/features/contracten/huisvesting'
 import { leesDienstpakket } from '@/features/contracten/dienstpakket'
 import { leesPrijsLooptijd } from '@/features/contracten/prijsLooptijd'
@@ -39,6 +43,9 @@ export default async function BewerkContractPage({ params }: Props) {
   const contract = await prisma.contract.findUnique({ where: { id: contractId } })
   if (!contract || contract.horseId !== id) notFound()
 
+  const isLease = contract.family === 'LEASE'
+  const bewerkLabel = isLease ? 'Leasecontract bewerken' : 'Stallingscontract bewerken'
+
   // Bewerken mag uitsluitend bij een concept-contract; bij elke andere status
   // tonen we een blokkering en geen formulier.
   if (contract.status !== 'CONCEPT') {
@@ -48,7 +55,7 @@ export default async function BewerkContractPage({ params }: Props) {
           <Link href={`/paarden/${id}?tab=contracten`} className="btn-ghost">← {horse.name}</Link>
         </div>
         <div style={{ marginBottom: 'var(--velaro-space-8)' }}>
-          <div className="label">Stallingscontract bewerken</div>
+          <div className="label">{bewerkLabel}</div>
           <h1 className="page-title">{horse.name}</h1>
         </div>
         <div className="panel">
@@ -73,6 +80,52 @@ export default async function BewerkContractPage({ params }: Props) {
   const defaultStartDate = contract.startDate
     ? new Date(contract.startDate).toISOString().slice(0, 10)
     : undefined
+
+  // ── Lease-tak ([Unify 04] #130) ────────────────────────────────────────────
+  // Een leasecontract gebruikt dezelfde stepper-UX als stalling, maar met de
+  // lease-blokken (LeaseContractStepperForm) en opslag op config.lease. Geen
+  // bijlagen/voederschema/huisvesting hier — die horen bij stalling. De disclaimer-
+  // banner blijft zichtbaar. Kosten/verzekering vallen buiten deze story (#131).
+  if (isLease) {
+    const leaseType = (
+      contract.type in LEASE_TYPE_LABELS ? contract.type : 'FULL'
+    ) as LeaseType
+    const lease = leesLeaseContractConfig(contract.config)
+    const leaseAction = updateLeaseContract.bind(null, id, contractId)
+
+    return (
+      <main className="page-container">
+        <div className="page-header">
+          <Link href={`/paarden/${id}?tab=contracten`} className="btn-ghost">← {horse.name}</Link>
+        </div>
+
+        <div style={{ marginBottom: 'var(--velaro-space-8)' }}>
+          <div className="label">{bewerkLabel}</div>
+          <h1 className="page-title">{horse.name}</h1>
+        </div>
+
+        {/* Disclaimer — geen juridisch advies. Blijft zichtbaar in de lease-flow. */}
+        <div
+          className="form-feedback form-feedback--error"
+          style={{ marginBottom: 'var(--velaro-space-6)' }}
+        >
+          ⚠️ Geen juridisch advies — laat dit contract juridisch toetsen vóór gebruik.
+        </div>
+
+        <LeaseContractStepperForm
+          horseId={id}
+          contractId={contractId}
+          leaseType={leaseType}
+          action={leaseAction}
+          owners={owners}
+          defaultCounterpartyUserId={contract.counterpartyUserId ?? undefined}
+          defaultStartDate={defaultStartDate}
+          lease={lease}
+          submitLabel="Wijzigingen opslaan"
+        />
+      </main>
+    )
+  }
 
   // Huisvesting-opties (STAL-03). Bij een leeg boxnummer voorvullen uit het
   // paardprofiel — overschrijfbaar in het formulier.

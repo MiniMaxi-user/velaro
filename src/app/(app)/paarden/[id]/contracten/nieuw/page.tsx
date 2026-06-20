@@ -4,15 +4,18 @@ import { getAuthUser } from '@/lib/auth/session'
 import { getHorse } from '@/features/paarden/queries'
 import { getStableRole } from '@/lib/auth/authorization'
 import ContractForm from '@/features/contracten/ContractForm'
-import { createStallingContract } from '@/features/contracten/actions'
+import { createStallingContract, createLeaseContract } from '@/features/contracten/actions'
 import { bepaalContractPoort } from '@/features/contracten/relatietypeMatching'
+import { LEASE_TYPE_LABELS } from '@/features/lease/leaseHelpers'
 
 interface Props {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ family?: string; type?: string }>
 }
 
-export default async function NieuwContractPage({ params }: Props) {
+export default async function NieuwContractPage({ params, searchParams }: Props) {
   const { id } = await params
+  const { family, type } = await searchParams
 
   const user = await getAuthUser()
   if (!user) redirect('/login')
@@ -25,6 +28,28 @@ export default async function NieuwContractPage({ params }: Props) {
 
   const eigenaren = horse.people.filter((p) => p.isOwner)
 
+  // ── Lease-tak ([Unify 04] #130) ────────────────────────────────────────────
+  // De "Nieuw contract"-dropdown (#129) routeert een gekozen leasevorm hierheen via
+  // ?family=LEASE&type=<leaseType>. We valideren de leasevorm, herbevestigen de
+  // lease-poort server-side (eigenaar gekoppeld), maken een concept-leasecontract aan
+  // en sturen door naar de bewerk-stepper. De stalling-tak hieronder blijft ongewijzigd.
+  if (family === 'LEASE') {
+    // Valideer de leasevorm tegen de bron van waarheid (LEASE_TYPE_LABELS).
+    if (!type || !(type in LEASE_TYPE_LABELS)) {
+      redirect(`/paarden/${id}?tab=contracten`)
+    }
+    // Lease-poort: er moet een eigenaar gekoppeld zijn (de leaser wordt pas in de
+    // opstel-flow gekozen). Is de poort dicht, dan terug naar de tab.
+    if (eigenaren.length === 0) {
+      redirect(`/paarden/${id}?tab=contracten`)
+    }
+    // Maak het concept aan en stuur door naar de bewerk-stepper. createLeaseContract
+    // dwingt de poort nogmaals server-side af.
+    const contractId = await createLeaseContract(id, type)
+    redirect(`/paarden/${id}/contracten/${contractId}/bewerken`)
+  }
+
+  // ── Stalling-tak (ongewijzigd) ─────────────────────────────────────────────
   // Poort (#113): relatietype + stallingsvorm + eigenaar zijn harde voorwaarden. Is
   // de poort dicht (bv. ontbrekende stallingsvorm of een niet-pension relatietype),
   // dan is er niets aan te maken — terug naar de tab, waar de knop de reden toont.

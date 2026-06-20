@@ -81,7 +81,13 @@ import {
 import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
 import { getPaardFotoDataUrl } from '@/features/paarden/paardFotoStorage'
 import { bepaalContractPoort } from './relatietypeMatching'
-import type { ContractStatus, Prisma } from '@prisma/client'
+import { LEASE_TYPE_LABELS } from '../lease/leaseHelpers'
+import {
+  kentDagenPerWeek,
+  kentKoopoptie,
+  type LeaseContractStepperConfig,
+} from './leaseContract'
+import type { ContractStatus, LeaseType, Prisma } from '@prisma/client'
 
 // Leest de huisvesting-opties (STAL-03) uit het formulier. Onbekende boxtypes
 // vallen terug op null; lege tekstvelden worden genormaliseerd naar null.
@@ -563,6 +569,182 @@ export async function deleteStallingContract(horseId: string, contractId: string
   revalidatePath(`/paarden/${horseId}`)
 }
 
+// ── Lease-contractflow via de stepper ([Unify 04] #130) ──────────────────────
+// Lease is sinds het contract-unify-epic (#126) een volwaardige contractfamilie.
+// De lease-flow spiegelt de stalling-flow: een concept-Contract (family=LEASE,
+// type=leasevorm) wordt aangemaakt en daarna via dezelfde stepper-UX ingevuld. De
+// rijke leasevelden worden onder config.lease bewaard (leaseContract.ts). In deze
+// story wordt nog GEEN Lease-rij gemaakt — dat gebeurt pas bij activatie (#132).
+// Kosten/verzekering vallen buiten deze story (#131).
+
+// Valideert een leasevorm-string tegen de LeaseType-enum (bron: LEASE_TYPE_LABELS).
+function leesLeaseType(value: unknown): LeaseType {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (raw && raw in LEASE_TYPE_LABELS) return raw as LeaseType
+  throw new Error('Onbekende leasevorm.')
+}
+
+// Leest de lease-contractinhoud uit het formulier en valideert server-side. De
+// leasevorm bepaalt welke velden van toepassing zijn (dagen/week bij deellease,
+// koopoptie bij KOOPOPTIE-lease); niet-toepasselijke velden worden genormaliseerd
+// naar de standaard. Lege velden mogen — de compleetheid van de verplichte velden
+// is een poort bij aanbieden, niet bij opslaan (zoals bij stalling).
+function leesLeaseContractForm(
+  formData: FormData,
+  leaseType: LeaseType,
+): LeaseContractStepperConfig {
+  const gebruiksrecht = (formData.get('gebruiksrecht') as string)?.trim() || null
+  const disciplines = (formData.get('disciplines') as string)?.trim() || null
+  const dagenPerWeek = kentDagenPerWeek(leaseType)
+    ? leesNietNegatiefGetal(formData.get('dagenPerWeek'), 'Het aantal dagen per week')
+    : null
+
+  const leasevergoeding = (formData.get('leasevergoeding') as string)?.trim() || null
+
+  const einddatum = (formData.get('looptijdEinddatum') as string)?.trim() || null
+  const minimumTermijnMaanden = leesNietNegatiefGetal(
+    formData.get('minimumTermijnMaanden'),
+    'De minimale looptijd',
+  )
+  const opzegtermijnDagen = leesNietNegatiefGetal(
+    formData.get('opzegtermijnDagen'),
+    'De opzegtermijn',
+  )
+  const proefActief = formData.get('proefActief') === 'true'
+  const proefEinddatum = (formData.get('proefEinddatum') as string)?.trim() || null
+
+  const berijderNaam = (formData.get('berijderNaam') as string)?.trim() || null
+  const berijderGeboortedatum =
+    (formData.get('berijderGeboortedatum') as string)?.trim() || null
+  const minderjarig = formData.get('berijderMinderjarig') === 'true'
+  const voogdNaam = (formData.get('voogdNaam') as string)?.trim() || null
+
+  // Koopoptie is alleen een eigen blok bij een KOOPOPTIE-lease; bij andere vormen
+  // telt enkel het optionele "eerste recht van koop".
+  const koopoptie = kentKoopoptie(leaseType) && formData.get('koopoptie') === 'true'
+  const koopprijs = koopoptie ? (formData.get('koopprijs') as string)?.trim() || null : null
+  const eersteRechtVanKoop = formData.get('eersteRechtVanKoop') === 'true'
+
+  const bijzonderheden = (formData.get('bijzonderheden') as string)?.trim() || null
+
+  return {
+    gebruiksrecht,
+    disciplines,
+    dagenPerWeek,
+    leasevergoeding,
+    looptijd: {
+      einddatum,
+      minimumTermijnMaanden,
+      opzegtermijnDagen,
+      proefperiode: {
+        actief: proefActief,
+        einddatum: proefActief ? proefEinddatum : null,
+      },
+    },
+    berijder: {
+      naam: berijderNaam,
+      geboortedatum: berijderGeboortedatum,
+      minderjarig,
+      voogdNaam: minderjarig ? voogdNaam : null,
+    },
+    koop: {
+      eersteRechtVanKoop,
+      koopoptie,
+      koopprijs,
+    },
+    bijzonderheden,
+  }
+}
+
+// Maakt een concept-leasecontract aan op een paard. family=LEASE, type=leasevorm,
+// status=CONCEPT, currentVersion=1. De poort (eigenaar gekoppeld) wordt hier
+// server-side afgedwongen, zodat een directe aanroep zonder eigenaar wordt geweigerd.
+// Spiegelt createStallingContract; de wederpartij (leaser) wordt in de opstel-flow
+// gekozen, dus hier nog niet vereist.
+export async function createLeaseContract(
+  horseId: string,
+  leaseTypeRaw: string,
+): Promise<string> {
+  const { horse } = await getAuthorizedStaff(horseId)
+  const leaseType = leesLeaseType(leaseTypeRaw)
+
+  // Lease-poort ([Unify 03] #129): een leasecontract kan pas worden aangemaakt wanneer
+  // er een eigenaar aan het paard gekoppeld is (de leaser wordt pas in de opstel-flow
+  // gekozen). Geen relatietype- of listing-eis.
+  const heeftEigenaar = await prisma.horsePerson.count({
+    where: { horseId, isOwner: true },
+  })
+  if (heeftEigenaar === 0) {
+    throw new Error('Koppel eerst een eigenaar aan het paard.')
+  }
+
+  const contract = await prisma.contract.create({
+    data: {
+      horseId,
+      stableId: horse.stableId,
+      family: 'LEASE',
+      type: leaseType,
+      status: 'CONCEPT',
+      currentVersion: 1,
+    },
+  })
+
+  revalidatePath(`/paarden/${horseId}`)
+  return contract.id
+}
+
+// Werkt de basis- en inhoudelijke velden van een concept-leasecontract bij. Bewaart
+// de leasevelden onder config.lease (bestaande config-sleutels blijven behouden).
+export async function updateLeaseContract(
+  horseId: string,
+  contractId: string,
+  formData: FormData,
+) {
+  const { contract } = await getEditableConceptContract(horseId, contractId)
+  if (contract.family !== 'LEASE') {
+    throw new Error('Dit is geen leasecontract.')
+  }
+  const leaseType = leesLeaseType(contract.type)
+
+  const counterpartyUserId = (formData.get('counterpartyUserId') as string)?.trim()
+  const startDateStr = (formData.get('startDate') as string)?.trim()
+
+  if (!counterpartyUserId) {
+    throw new Error('Kies een wederpartij (paardeigenaar).')
+  }
+
+  // De wederpartij moet een eigenaar van dit paard zijn.
+  const ownerLink = await prisma.horsePerson.findUnique({
+    where: { horseId_userId: { horseId, userId: counterpartyUserId } },
+  })
+  if (!ownerLink || !ownerLink.isOwner) {
+    throw new Error('De gekozen wederpartij is geen eigenaar van dit paard.')
+  }
+
+  const lease = leesLeaseContractForm(formData, leaseType)
+
+  const bestaandeConfig =
+    contract.config && typeof contract.config === 'object' && !Array.isArray(contract.config)
+      ? (contract.config as Record<string, unknown>)
+      : {}
+  const nieuweConfig = {
+    ...bestaandeConfig,
+    lease,
+  }
+
+  await prisma.contract.update({
+    where: { id: contractId },
+    data: {
+      counterpartyUserId,
+      startDate: startDateStr ? new Date(startDateStr) : null,
+      config: nieuweConfig,
+    },
+  })
+
+  revalidatePath(`/paarden/${horseId}`)
+  redirect(`/paarden/${horseId}?tab=contracten`)
+}
+
 // Biedt een concept-contract aan de paardeigenaar aan (STAL-08, #81). Server-side
 // afgedwongen: alleen OWNER/STAFF, alleen de toegestane overgang CONCEPT →
 // AANGEBODEN, en alleen wanneer alle verplichte optieblokken volledig zijn. Het
@@ -588,16 +770,23 @@ export async function offerContract(horseId: string, contractId: string) {
   }
 
   // Verplicht-veld-validatie: alle verplichte optieblokken moeten volledig zijn.
-  // Het stalreglement is een DB-feit (gekoppelde bijlage), dus apart ophalen en
-  // doorgeven aan de validatie (telt alleen mee bij stalreglementVerplicht).
-  const heeftStalreglement = await heeftStalreglementBijlage(contractId)
-  const ontbreekt = ontbrekendeAanbiedVelden(contract.config, heeftStalreglement)
-  if (ontbreekt.length > 0) {
-    throw new Error(
-      `Het contract is nog niet compleet en kan niet worden aangeboden. Ontbreekt nog — ${ontbrekendeVeldenSamenvatting(
-        ontbreekt,
-      )}.`,
-    )
+  // Deze validatie is stalling-specifiek (STAL-08). Voor lease ([Unify 04] #130)
+  // bestaat de aanbied-/ondertekenvalidatie nog niet — die wordt in [Unify 06] #132
+  // afgemaakt. We slaan de stalling-validatie hier daarom over voor niet-stalling-
+  // families, zodat de stalling-poort byte-identiek blijft en lease niet onterecht op
+  // stalling-velden blokkeert.
+  if (contract.family === 'STALLING') {
+    // Het stalreglement is een DB-feit (gekoppelde bijlage), dus apart ophalen en
+    // doorgeven aan de validatie (telt alleen mee bij stalreglementVerplicht).
+    const heeftStalreglement = await heeftStalreglementBijlage(contractId)
+    const ontbreekt = ontbrekendeAanbiedVelden(contract.config, heeftStalreglement)
+    if (ontbreekt.length > 0) {
+      throw new Error(
+        `Het contract is nog niet compleet en kan niet worden aangeboden. Ontbreekt nog — ${ontbrekendeVeldenSamenvatting(
+          ontbreekt,
+        )}.`,
+      )
+    }
   }
 
   // Aanbiedmoment append-only vastleggen in config.statusHistorie.
@@ -634,10 +823,13 @@ export async function offerContract(horseId: string, contractId: string) {
       data: {
         horseId,
         authorId: user.id,
-        subject: 'Nieuw stallingscontract aangeboden',
-        body: `Er is een stallingscontract aangeboden voor ${
-          horse?.name ?? 'je paard'
-        }. Bekijk en beoordeel het aanbod.`,
+        subject:
+          contract.family === 'LEASE'
+            ? 'Nieuw leasecontract aangeboden'
+            : 'Nieuw stallingscontract aangeboden',
+        body: `Er is een ${
+          contract.family === 'LEASE' ? 'leasecontract' : 'stallingscontract'
+        } aangeboden voor ${horse?.name ?? 'je paard'}. Bekijk en beoordeel het aanbod.`,
       },
     }),
   ])
