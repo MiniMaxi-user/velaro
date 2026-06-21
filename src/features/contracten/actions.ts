@@ -664,6 +664,11 @@ function leesLeaseContractForm(
   const dagenPerWeek = kentDagenPerWeek(leaseType)
     ? leesNietNegatiefGetal(formData.get('dagenPerWeek'), 'Het aantal dagen per week')
     : null
+  const maxGewichtRuiterKg = leesNietNegatiefGetal(
+    formData.get('maxGewichtRuiterKg'),
+    'Het maximale gewicht van de ruiter',
+  )
+  const beperkingen = (formData.get('beperkingen') as string)?.trim() || null
 
   // Kosten ([Unify 05] #131): gestructureerde kostenverdeling per post + de
   // leasevergoeding (excl. btw) met 21%-btw-toggle. Vervangt het vrije-tekstveld
@@ -681,6 +686,12 @@ function leesLeaseContractForm(
   const opzegtermijnDagen = leesNietNegatiefGetal(
     formData.get('opzegtermijnDagen'),
     'De opzegtermijn',
+  )
+  const opzegtermijnEenheid =
+    formData.get('opzegtermijnEenheid') === 'KALENDERMAANDEN' ? 'KALENDERMAANDEN' : 'DAGEN'
+  const doorbetalingBijBlessureDagen = leesNietNegatiefGetal(
+    formData.get('doorbetalingBijBlessureDagen'),
+    'De doorbetaling bij blessure',
   )
   const proefActief = formData.get('proefActief') === 'true'
   const proefEinddatum = (formData.get('proefEinddatum') as string)?.trim() || null
@@ -703,12 +714,16 @@ function leesLeaseContractForm(
     gebruiksrecht,
     disciplines,
     dagenPerWeek,
+    maxGewichtRuiterKg,
+    beperkingen,
+    doorbetalingBijBlessureDagen,
     kosten,
     verzekering,
     looptijd: {
       einddatum,
       minimumTermijnMaanden,
       opzegtermijnDagen,
+      opzegtermijnEenheid,
       proefperiode: {
         actief: proefActief,
         einddatum: proefActief ? proefEinddatum : null,

@@ -217,6 +217,33 @@ export default function LeaseContractStepperForm({
               <span className="form-hint">Het vaste aantal dagen per week bij een deellease.</span>
             </div>
           )}
+
+          <div className="form-group">
+            <label htmlFor="maxGewichtRuiterKg" className="form-label">Max. gewicht ruiter (kg)</label>
+            <input
+              id="maxGewichtRuiterKg"
+              name="maxGewichtRuiterKg"
+              type="number"
+              min="0"
+              step="1"
+              className="input"
+              placeholder="bijv. 70"
+              defaultValue={lease.maxGewichtRuiterKg ?? ''}
+            />
+            <span className="form-hint">Maximaal toegestaan gewicht van de ruiter. Laat leeg indien niet van toepassing.</span>
+          </div>
+
+          <div className="form-group form-grid--full">
+            <label htmlFor="beperkingen" className="form-label">Beperkingen / aandachtspunten paard</label>
+            <textarea
+              id="beperkingen"
+              name="beperkingen"
+              rows={2}
+              className="input"
+              placeholder="bijv. mag niet springen, wel balkjes, braaf op buitenrit, mag met barebackpad gereden worden"
+              defaultValue={lease.beperkingen ?? ''}
+            />
+          </div>
         </div>
       ),
     },
@@ -389,7 +416,7 @@ export default function LeaseContractStepperForm({
             </div>
 
             <div className="form-group">
-              <label htmlFor="opzegtermijnDagen" className="form-label">Opzegtermijn (dagen) {ster}</label>
+              <label htmlFor="opzegtermijnDagen" className="form-label">Opzegtermijn {ster}</label>
               <input
                 id="opzegtermijnDagen"
                 name="opzegtermijnDagen"
@@ -397,9 +424,23 @@ export default function LeaseContractStepperForm({
                 min="0"
                 step="1"
                 className="input"
-                placeholder="bijv. 30"
+                placeholder="bijv. 1 (maand) of 30 (dagen)"
                 defaultValue={lease.looptijd.opzegtermijnDagen ?? ''}
               />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="opzegtermijnEenheid" className="form-label">Eenheid opzegtermijn</label>
+              <select
+                id="opzegtermijnEenheid"
+                name="opzegtermijnEenheid"
+                className="input"
+                defaultValue={lease.looptijd.opzegtermijnEenheid}
+              >
+                <option value="DAGEN">Dagen</option>
+                <option value="KALENDERMAANDEN">Kalendermaanden</option>
+              </select>
+              <span className="form-hint">Bijv. &ldquo;1 kalendermaand&rdquo; of &ldquo;30 dagen&rdquo;.</span>
             </div>
           </div>
 
@@ -424,6 +465,29 @@ export default function LeaseContractStepperForm({
                 defaultValue={lease.looptijd.proefperiode.einddatum ?? ''}
               />
               <span className="form-hint">Verplicht wanneer er een proefperiode geldt.</span>
+            </div>
+          </div>
+
+          <div className="form-subblock-title" style={{ marginTop: 'var(--velaro-space-6)' }}>Blessure</div>
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="doorbetalingBijBlessureDagen" className="form-label">
+                Doorbetaling bij blessure (dagen)
+              </label>
+              <input
+                id="doorbetalingBijBlessureDagen"
+                name="doorbetalingBijBlessureDagen"
+                type="number"
+                min="0"
+                step="1"
+                className="input"
+                placeholder="bijv. 14"
+                defaultValue={lease.doorbetalingBijBlessureDagen ?? ''}
+              />
+              <span className="form-hint">
+                Aantal dagen dat de leasevergoeding doorloopt bij blessure van het paard,
+                voordat over aanpassing wordt overlegd.
+              </span>
             </div>
           </div>
         </>

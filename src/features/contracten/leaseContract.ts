@@ -13,6 +13,16 @@ import {
 // verwijderde leaseContractConfig.ts; nu hier de bron-van-waarheid ([Unify 08] #134).
 export type Ondertekening = { naam: string; datum: string } | null
 
+// Eenheid van de opzegtermijn. Naast een termijn in dagen is "per kalendermaand" een
+// veelvoorkomende juridische vorm (#139-vervolg, Stal Jasper-leasecontract). Default
+// DAGEN, zodat bestaande contracten ongewijzigd blijven.
+export type OpzegtermijnEenheid = 'DAGEN' | 'KALENDERMAANDEN'
+
+export const OPZEGTERMIJN_EENHEID_LABELS: Record<OpzegtermijnEenheid, string> = {
+  DAGEN: 'dagen',
+  KALENDERMAANDEN: 'kalendermaanden',
+}
+
 // ── Lease-contractinhoud op Contract.config ([Unify 04] #130, [Unify 05] #131) ─
 // De rijke leasevelden van de unified contract-flow worden — net als de
 // stalling-optieblokken (huisvesting/prijsLooptijd/…) — als JSON op
@@ -37,6 +47,14 @@ export type LeaseContractStepperConfig = {
   disciplines: string | null
   // Aantal dagen per week (alleen relevant bij DEEL-lease).
   dagenPerWeek: number | null
+  // Maximaal toegestaan gewicht van de ruiter in kg (Stal Jasper-leasecontract).
+  maxGewichtRuiterKg: number | null
+  // Beperkingen / aandachtspunten van het paard (bv. "niet springen, wel balkjes,
+  // barebackpad"). Vrije tekst, los van het algemene `bijzonderheden`-veld.
+  beperkingen: string | null
+  // Doorbetaling bij blessure van het paard: aantal dagen dat de leasevergoeding
+  // doorloopt voordat over aanpassing wordt overlegd (Stal Jasper: 14 dagen).
+  doorbetalingBijBlessureDagen: number | null
 
   // Kosten & leasevergoeding ([Unify 05] #131). Gestructureerd via LeaseKosten
   // (kostenverdeling per post + vergoeding excl. btw + 21%-btw-toggle). Vervangt
@@ -55,6 +73,8 @@ export type LeaseContractStepperConfig = {
     einddatum: string | null
     minimumTermijnMaanden: number | null
     opzegtermijnDagen: number | null
+    // Eenheid van de opzegtermijn (dagen of kalendermaanden).
+    opzegtermijnEenheid: OpzegtermijnEenheid
     proefperiode: {
       actief: boolean
       einddatum: string | null
@@ -87,12 +107,16 @@ export const LEGE_LEASE_CONTRACT: LeaseContractStepperConfig = {
   gebruiksrecht: null,
   disciplines: null,
   dagenPerWeek: null,
+  maxGewichtRuiterKg: null,
+  beperkingen: null,
+  doorbetalingBijBlessureDagen: null,
   kosten: legeLeaseKosten(),
   verzekering: { ...LEGE_VERZEKERING, polissen: [] },
   looptijd: {
     einddatum: null,
     minimumTermijnMaanden: null,
     opzegtermijnDagen: null,
+    opzegtermijnEenheid: 'DAGEN',
     proefperiode: { actief: false, einddatum: null },
   },
   berijder: {
@@ -172,12 +196,17 @@ export function leesLeaseContractConfig(
     gebruiksrecht: tekst(l.gebruiksrecht),
     disciplines: tekst(l.disciplines),
     dagenPerWeek: getal(l.dagenPerWeek),
+    maxGewichtRuiterKg: getal(l.maxGewichtRuiterKg),
+    beperkingen: tekst(l.beperkingen),
+    doorbetalingBijBlessureDagen: getal(l.doorbetalingBijBlessureDagen),
     kosten,
     verzekering: { ...verzekeringRuw, polissen: [] },
     looptijd: {
       einddatum: tekst(looptijdRaw.einddatum),
       minimumTermijnMaanden: getal(looptijdRaw.minimumTermijnMaanden),
       opzegtermijnDagen: getal(looptijdRaw.opzegtermijnDagen),
+      opzegtermijnEenheid:
+        looptijdRaw.opzegtermijnEenheid === 'KALENDERMAANDEN' ? 'KALENDERMAANDEN' : 'DAGEN',
       proefperiode: {
         actief: proefActief,
         einddatum: proefActief ? tekst(proefRaw.einddatum) : null,
