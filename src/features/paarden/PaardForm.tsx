@@ -27,23 +27,17 @@ export default function PaardForm({ horse }: Props) {
   const [uitgesloten, setUitgesloten] = useState(horse?.excludedFromConsumption ?? false)
 
   async function action(prev: State, formData: FormData): Promise<State> {
-    try {
-      await serverAction(formData)
-      return {}
-    } catch (e) {
-      if ((e as { digest?: string }).digest?.startsWith('NEXT_REDIRECT')) throw e
-      const raw = (e as Error).message
-      // Veldgebonden fout? De server codeert die als JSON { field, message }.
-      try {
-        const parsed = JSON.parse(raw)
-        if (parsed && typeof parsed.field === 'string' && typeof parsed.message === 'string') {
-          return { fieldError: parsed, submittedAt: Date.now() }
-        }
-      } catch {
-        // Geen JSON → generieke fout.
-      }
-      return { error: raw, submittedAt: Date.now() }
+    // Bij succes redirect de server action en komt er niets terug. Faalt
+    // validatie/autorisatie, dan geeft de action het resultaat als waarde terug
+    // (geen throw) — gegooide foutmeldingen worden in productie immers gemaskeerd.
+    const result = await serverAction(formData)
+    if (result?.fieldError) {
+      return { fieldError: result.fieldError, submittedAt: Date.now() }
     }
+    if (result?.error) {
+      return { error: result.error, submittedAt: Date.now() }
+    }
+    return {}
   }
 
   const [state, formAction] = useActionState(action, {})

@@ -13,6 +13,7 @@ import type {
 } from '@prisma/client'
 import { getUserStable } from './queries'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { normalizeChipNumber, validateHorseFields } from './paardValidation'
 
 async function getCurrentUser() {
   const supabase = await createClient()
@@ -24,42 +25,36 @@ async function getCurrentUser() {
 }
 
 /**
- * Veldgebonden validatiefout. De `field` komt overeen met de `name` van het
- * formulierveld in `PaardForm`, zodat de client de melding bij het juiste veld
- * kan tonen (`.input.is-error` + `.form-error`). De message wordt JSON-gecodeerd
- * zodat hij ongewijzigd door de bestaande server-action-throw/catch heen reist.
+ * Resultaat van een paard-formulieractie. Bij succes wordt geredirect (er komt
+ * dan niets terug); faalt validatie of autorisatie, dan komt het resultaat als
+ * waarde terug — niet via een throw. Dat is bewust: uit een server action
+ * gegooide foutmeldingen worden in een productiebuild gemaskeerd (alleen
+ * `digest` blijft over), waardoor een veldmelding de client nooit bereikt.
+ * Door te `return`-en blijft de melding (en de veld-identifier) intact.
  */
-class HorseFieldError extends Error {
-  field: string
-  constructor(field: string, message: string) {
-    super(JSON.stringify({ field, message }))
-    this.field = field
-    this.name = 'HorseFieldError'
-  }
+type HorseFormResult = {
+  error?: string
+  fieldError?: { field: string; message: string }
 }
 
-function parseHorseFormData(formData: FormData) {
-  const name = (formData.get('name') as string)?.trim()
-  if (!name) throw new HorseFieldError('name', 'Naam is verplicht')
+/**
+ * Resultaat van `parseHorseFormData`: óf de geparste data, óf een veldgebonden
+ * validatiefout. De `field` komt overeen met de `name` van het formulierveld in
+ * `PaardForm`, zodat de client de melding bij het juiste veld kan tonen
+ * (`.input.is-error` + `.form-error`).
+ */
+type ParsedHorse = ReturnType<typeof buildHorseData>
+type ParseResult =
+  | { fieldError: { field: string; message: string } }
+  | { data: ParsedHorse }
 
+function buildHorseData(formData: FormData, name: string, chipNumber: string | null) {
   const dateOfBirthStr = formData.get('dateOfBirth') as string
   const sexStr = formData.get('sex') as string
-
-  const chipNumberRaw = (formData.get('chipNumber') as string)?.trim() || null
-  const chipNumberDigits = chipNumberRaw ? chipNumberRaw.replace(/\D/g, '') : null
-  const chipNumber = chipNumberDigits || null
-  if (chipNumber && chipNumber.length !== 15) {
-    throw new HorseFieldError(
-      'chipNumber',
-      'Chipnummer moet exact 15 cijfers bevatten (spaties en streepjes worden automatisch verwijderd)'
-    )
-  }
-
-  const excludedFromConsumption = formData.get('excludedFromConsumption') === 'true'
-  const excludedDateStr = formData.get('excludedFromConsumptionDate') as string
-
   const relatietypeStr = (formData.get('relatietype') as string)?.trim()
   const stallingsvormStr = (formData.get('stallingsvorm') as string)?.trim()
+  const excludedFromConsumption = formData.get('excludedFromConsumption') === 'true'
+  const excludedDateStr = formData.get('excludedFromConsumptionDate') as string
 
   return {
     name,
@@ -83,37 +78,55 @@ function parseHorseFormData(formData: FormData) {
   }
 }
 
-export async function createHorse(formData: FormData) {
+/**
+ * Valideert en parseert het paard-formulier. Geeft bij een veldfout een
+ * `fieldError` terug (niet gooien), zodat de aanroeper die als waarde kan
+ * doorgeven aan de client. De validatieregels (verplicht `name`, 15-cijfer
+ * `chipNumber`) leven in `paardValidation` zodat ze los testbaar zijn.
+ */
+function parseHorseFormData(formData: FormData): ParseResult {
+  const name = (formData.get('name') as string)?.trim()
+  const chipNumber = normalizeChipNumber(formData.get('chipNumber') as string)
+
+  const fieldError = validateHorseFields({ name, chipNumber })
+  if (fieldError) return { fieldError }
+
+  return { data: buildHorseData(formData, name as string, chipNumber) }
+}
+
+export async function createHorse(formData: FormData): Promise<HorseFormResult> {
   const user = await getCurrentUser()
 
   const stable = await getUserStable(user.id)
-  if (!stable) throw new Error('Geen stal gevonden voor deze gebruiker')
+  if (!stable) return { error: 'Geen stal gevonden voor deze gebruiker' }
 
   const role = await getStableRole(user.id, stable.id)
-  if (!role) throw new Error('Geen toegang')
+  if (!role) return { error: 'Geen toegang' }
 
-  const data = parseHorseFormData(formData)
+  const parsed = parseHorseFormData(formData)
+  if ('fieldError' in parsed) return { fieldError: parsed.fieldError }
 
   const horse = await prisma.horse.create({
-    data: { ...data, stableId: stable.id },
+    data: { ...parsed.data, stableId: stable.id },
   })
 
   revalidatePath('/paarden')
   redirect(`/paarden/${horse.id}`)
 }
 
-export async function updateHorse(id: string, formData: FormData) {
+export async function updateHorse(id: string, formData: FormData): Promise<HorseFormResult> {
   const user = await getCurrentUser()
 
   const horse = await prisma.horse.findUnique({ where: { id } })
-  if (!horse) throw new Error('Paard niet gevonden')
+  if (!horse) return { error: 'Paard niet gevonden' }
 
   const role = await getStableRole(user.id, horse.stableId)
-  if (!role) throw new Error('Geen toegang')
+  if (!role) return { error: 'Geen toegang' }
 
-  const data = parseHorseFormData(formData)
+  const parsed = parseHorseFormData(formData)
+  if ('fieldError' in parsed) return { fieldError: parsed.fieldError }
 
-  await prisma.horse.update({ where: { id }, data })
+  await prisma.horse.update({ where: { id }, data: parsed.data })
 
   revalidatePath(`/paarden/${id}`)
   redirect(`/paarden/${id}`)
