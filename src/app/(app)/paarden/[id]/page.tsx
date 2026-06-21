@@ -6,7 +6,7 @@ import { getStableRole, canViewHorse, getLeaseForHorse } from '@/lib/auth/author
 import { leaseTypeLabel } from '@/features/lease/leaseHelpers'
 import { getLeaseListingForHorse } from '@/features/lease/listingQueries'
 import LeaseListingPanel, { type LeaseListingView } from '@/features/lease/LeaseListingPanel'
-import { GESLACHT_LABELS, RELATIETYPE_LABELS, STALLINGSVORM_LABELS, berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
+import { GESLACHT_LABELS, RELATIETYPE_LABELS, STALLINGSVORM_LABELS, berekenLeeftijd, formatDatum, heeftEigenaar } from '@/features/paarden/paardHelpers'
 import { RelatietypeBadge, StallingsvormBadge } from '@/features/paarden/RelatieBadges'
 import DeletePaardButton from '@/features/paarden/DeletePaardButton'
 import PersonenBeheer from '@/features/paarden/PersonenBeheer'
@@ -275,7 +275,10 @@ export default async function PaardDetailPage({ params }: Props) {
           />
         )
 
-        const heeftEigenaar = horse.people.some((p) => p.isOwner)
+        const eigenaarAanwezig = heeftEigenaar({
+          eigendom: horse.eigendom,
+          people: horse.people,
+        })
 
         // Contractopties ([Unify 03] #129): de "Nieuw contract"-dropdown toont
         // stalling (poort #113: relatietype = pensionpaard, stallingsvorm ∈ {volledig
@@ -285,7 +288,7 @@ export default async function PaardDetailPage({ params }: Props) {
         const contractOpties = bepaalContractOpties({
           relatietype: horse.relatietype,
           stallingsvorm: horse.stallingsvorm,
-          heeftEigenaar,
+          heeftEigenaar: eigenaarAanwezig,
         })
 
         const contractenPanel = (
@@ -328,7 +331,13 @@ export default async function PaardDetailPage({ params }: Props) {
                 algemeen={algemeenPanel}
                 gezondheid={gezondheidPanel}
                 eigenaren={
-                  <PersonenBeheer horseId={id} people={horse.people} members={stalleden} />
+                  <PersonenBeheer
+                    horseId={id}
+                    people={horse.people}
+                    members={stalleden}
+                    eigendom={horse.eigendom}
+                    stalNaam={horse.stable.name}
+                  />
                 }
                 voederschema={voederschemaPanel}
                 berichten={berichtenPanel}

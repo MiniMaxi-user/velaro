@@ -17,7 +17,7 @@ import {
   type LeaseContractStepperConfig,
 } from './leaseContract'
 
-type OwnerOption = { userId: string; label: string }
+type LeaserOption = { userId: string; label: string }
 
 function euro(n: number): string {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n)
@@ -38,7 +38,7 @@ export default function LeaseContractStepperForm({
   contractId,
   leaseType,
   action,
-  owners,
+  leasers,
   defaultCounterpartyUserId,
   defaultStartDate,
   lease,
@@ -48,7 +48,7 @@ export default function LeaseContractStepperForm({
   contractId: string
   leaseType: LeaseType
   action: (formData: FormData) => Promise<void>
-  owners: OwnerOption[]
+  leasers: LeaserOption[]
   defaultCounterpartyUserId?: string
   defaultStartDate?: string
   lease: LeaseContractStepperConfig
@@ -125,7 +125,7 @@ export default function LeaseContractStepperForm({
 
           <div className="form-group">
             <label htmlFor="counterpartyUserId" className="form-label">
-              Wederpartij (eigenaar) {ster}
+              Leaser {ster}
             </label>
             <select
               id="counterpartyUserId"
@@ -134,21 +134,22 @@ export default function LeaseContractStepperForm({
               required
               defaultValue={
                 defaultCounterpartyUserId ??
-                (owners.length === 1 ? owners[0].userId : '')
+                (leasers.length === 1 ? leasers[0].userId : '')
               }
             >
               <option value="" disabled>
-                Kies een eigenaar
+                Kies een leaser
               </option>
-              {owners.map((o) => (
+              {leasers.map((o) => (
                 <option key={o.userId} value={o.userId}>
                   {o.label}
                 </option>
               ))}
             </select>
             <span className="form-hint">
-              Het contract wordt met de (meerderjarige) eigenaar gesloten. Een eventuele
-              berijder benoem je verderop, los van de wederpartij.
+              De leaser is de wederpartij van de lease. De eigenaar-kant (de stal of de
+              particuliere eigenaar) volgt automatisch uit het paard. Een eventuele
+              berijder benoem je verderop, los van de leaser.
             </span>
           </div>
 

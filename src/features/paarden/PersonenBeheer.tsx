@@ -2,7 +2,13 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { addHorsePerson, toggleHorsePersonRole, removeHorsePerson } from './actions'
+import type { HorseEigendom } from '@prisma/client'
+import {
+  addHorsePerson,
+  toggleHorsePersonRole,
+  removeHorsePerson,
+  setHorseEigendom,
+} from './actions'
 
 type Person = {
   id: string
@@ -48,11 +54,33 @@ function RolBadge({
   )
 }
 
-export default function PersonenBeheer({ horseId, people, members }: {
+export default function PersonenBeheer({ horseId, people, members, eigendom, stalNaam }: {
   horseId: string
   people: Person[]
   members: StableMember[]
+  eigendom: HorseEigendom
+  stalNaam: string
 }) {
+  // Eigendom (STAL / PARTICULIER) — bron van waarheid voor "wie is eigenaar".
+  const [eigendomState, setEigendomState] = useState<HorseEigendom>(eigendom)
+  const [eigendomPending, startEigendom] = useTransition()
+  const [eigendomError, setEigendomError] = useState<string | null>(null)
+  const isStalEigendom = eigendomState === 'STAL'
+
+  function handleEigendom(next: HorseEigendom) {
+    if (next === eigendomState) return
+    setEigendomError(null)
+    const vorige = eigendomState
+    setEigendomState(next)
+    startEigendom(async () => {
+      const result = await setHorseEigendom(horseId, next)
+      if (result?.error) {
+        setEigendomState(vorige)
+        setEigendomError(result.error)
+      }
+    })
+  }
+
   const [addError, setAddError] = useState<string | null>(null)
   const [addPending, startAdd] = useTransition()
   const [rowError, setRowError] = useState<string | null>(null)
@@ -173,13 +201,20 @@ export default function PersonenBeheer({ horseId, people, members }: {
       setAddError('Kies een persoon uit de lijst.')
       return
     }
-    if (!addOwner && !addRider) {
-      setAddError('Kies minstens één rol (eigenaar of bereider).')
+    // Bij stal-eigendom is de stal de eigenaar; een gekoppelde persoon kan dan alleen
+    // bereider zijn (geen particuliere eigenaar-rol).
+    const wilOwner = isStalEigendom ? false : addOwner
+    if (!wilOwner && !addRider) {
+      setAddError(
+        isStalEigendom
+          ? 'Kies de rol bereider.'
+          : 'Kies minstens één rol (eigenaar of bereider).'
+      )
       return
     }
     const fd = new FormData()
     fd.set('email', gekozenEmail)
-    fd.set('isOwner', addOwner ? 'true' : 'false')
+    fd.set('isOwner', wilOwner ? 'true' : 'false')
     fd.set('isRider', addRider ? 'true' : 'false')
     startAdd(async () => {
       const result = await addHorsePerson(horseId, fd)
@@ -212,6 +247,50 @@ export default function PersonenBeheer({ horseId, people, members }: {
     // Eén enkele panel-kaart met het grid direct erin, identiek aan GezondheidTabs.
     // Geen extra bordered container (panel-body) eromheen meer (#121).
     <div className="panel">
+      {/* Eigendom: is dit paard van de stal zelf of van een particuliere eigenaar?
+          Bron van waarheid voor "wie is eigenaar" (en de contract-poort). */}
+      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--velaro-color-border)' }}>
+        <div className="form-label" style={{ marginBottom: 6 }}>Eigendom</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className={`badge ${isStalEigendom ? 'badge-gold' : 'badge-neutral'}`}
+            style={{ cursor: eigendomPending ? 'wait' : 'pointer', border: 'none', opacity: eigendomPending ? 0.6 : isStalEigendom ? 1 : 0.55 }}
+            aria-pressed={isStalEigendom}
+            disabled={eigendomPending}
+            onClick={() => handleEigendom('STAL')}
+          >
+            Deze stal
+          </button>
+          <button
+            type="button"
+            className={`badge ${!isStalEigendom ? 'badge-gold' : 'badge-neutral'}`}
+            style={{ cursor: eigendomPending ? 'wait' : 'pointer', border: 'none', opacity: eigendomPending ? 0.6 : !isStalEigendom ? 1 : 0.55 }}
+            aria-pressed={!isStalEigendom}
+            disabled={eigendomPending}
+            onClick={() => handleEigendom('PARTICULIER')}
+          >
+            Particuliere eigenaar
+          </button>
+        </div>
+        <p className="form-hint" style={{ marginTop: 8 }}>
+          {isStalEigendom
+            ? `${stalNaam} is eigenaar van dit paard. Een leasecontract kan rechtstreeks met de stal als eigenaar worden opgesteld; je hoeft geen particuliere eigenaar te koppelen.`
+            : 'Het paard is van een particuliere eigenaar. Koppel hieronder de eigenaar (en eventueel een bereider).'}
+        </p>
+        {eigendomError && (
+          <div className="form-feedback form-feedback--error" style={{ marginTop: 8 }}>
+            {eigendomError}
+          </div>
+        )}
+        {isStalEigendom && people.some((p) => p.isOwner) && (
+          <div className="form-feedback form-feedback--error" style={{ marginTop: 8 }}>
+            Er staan nog particuliere eigenaren gekoppeld. Zet hun eigenaar-rol uit —
+            bij stal-eigendom is de stal de eigenaar.
+          </div>
+        )}
+      </div>
+
       {/* Toevoegen-knop rechts boven het grid, zoals de gezondheid-subtabs (#121).
           Geen aparte (bruine) kopbalk meer. */}
       {!showForm && (
@@ -345,14 +424,16 @@ export default function PersonenBeheer({ horseId, people, members }: {
             </button>
           </form>
           <div style={{ display: 'flex', gap: 16, marginTop: 'var(--velaro-space-3)', fontSize: 'var(--velaro-text-sm)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={addOwner}
-                onChange={(e) => setAddOwner(e.target.checked)}
-              />
-              Eigenaar
-            </label>
+            {!isStalEigendom && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={addOwner}
+                  onChange={(e) => setAddOwner(e.target.checked)}
+                />
+                Eigenaar
+              </label>
+            )}
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input
                 type="checkbox"

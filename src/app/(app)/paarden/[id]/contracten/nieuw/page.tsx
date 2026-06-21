@@ -7,6 +7,7 @@ import ContractForm from '@/features/contracten/ContractForm'
 import LeaseContractStart from '@/features/contracten/LeaseContractStart'
 import { createStallingContract, createLeaseContract } from '@/features/contracten/actions'
 import { bepaalContractPoort } from '@/features/contracten/relatietypeMatching'
+import { heeftEigenaar } from '@/features/paarden/paardHelpers'
 import { LEASE_TYPE_LABELS } from '@/features/lease/leaseHelpers'
 
 interface Props {
@@ -43,9 +44,11 @@ export default async function NieuwContractPage({ params, searchParams }: Props)
     if (!type || !(type in LEASE_TYPE_LABELS)) {
       redirect(`/paarden/${id}?tab=contracten`)
     }
-    // Lease-poort: er moet een eigenaar gekoppeld zijn (de leaser wordt pas in de
-    // opstel-flow gekozen). Is de poort dicht, dan terug naar de tab.
-    if (eigenaren.length === 0) {
+    // Lease-poort: er moet een eigenaar zijn (de leaser wordt pas in de opstel-flow
+    // gekozen). Bij een stal-eigen paard is de stal de eigenaar; bij een particulier
+    // paard moet er een HorsePerson-eigenaar gekoppeld zijn. Is de poort dicht, dan
+    // terug naar de tab.
+    if (!heeftEigenaar({ eigendom: horse.eigendom, people: horse.people })) {
       redirect(`/paarden/${id}?tab=contracten`)
     }
     // createLeaseContract (gebonden aan paard + leasevorm) maakt bij submit het concept

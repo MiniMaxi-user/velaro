@@ -180,6 +180,15 @@ model Horse {
   relatietype   HorseRelatietype?
   stallingsvorm HorseStallingsvorm?
 
+  // Eigendom: is dit paard van de stal zelf (manege/lespaard/stalpaard) of van een
+  // particuliere eigenaar? Expliciet en losgekoppeld van `relatietype` (dat blijft
+  // beschrijvend "soort paard"). Bron van waarheid voor "wie is eigenaar":
+  //  - STAL        → eigenaar = de stal (Horse.stableId); geen HorsePerson-eigenaar nodig.
+  //  - PARTICULIER → eigenaar = de HorsePerson met isOwner = true.
+  // Bepaalt o.a. of een (lease)contract opgesteld kan worden zonder gekoppelde
+  // eigenaar-User (bij STAL is de stal de eigenaar).
+  eigendom HorseEigendom @default(PARTICULIER)
+
   // Profielfoto (#118): pad in de privé Supabase Storage-bucket `horse-photos`.
   // Net als het stallogo bewaren we enkel het storage-pad; de foto zelf staat in
   // Storage en wordt server-side via een signed URL (UI) of data-URL (PDF) ingezien.
@@ -241,6 +250,14 @@ enum HorseRelatietype {
   OPFOKPAARD         // opfokpaard
   REVALIDATIEPAARD   // revalidatie- / herstelpaard
   RUSTPAARD          // rust- / pensioenpaard
+}
+
+// Eigendom van het paard — binair, los van het beschrijvende `relatietype` (As 1).
+// STAL = eigendom van de stal zelf (manege/les-/stalpaard); PARTICULIER = een
+// particuliere (externe) eigenaar, gekoppeld via HorsePerson.isOwner.
+enum HorseEigendom {
+  STAL
+  PARTICULIER
 }
 
 // As 2 — Stallingsvorm: afgenomen stallingsdienst, los van het relatietype.

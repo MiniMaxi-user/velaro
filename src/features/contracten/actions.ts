@@ -749,13 +749,17 @@ export async function createLeaseContract(
   const leaseType = leesLeaseType(leaseTypeRaw)
 
   // Lease-poort ([Unify 03] #129): een leasecontract kan pas worden aangemaakt wanneer
-  // er een eigenaar aan het paard gekoppeld is (de leaser wordt pas in de opstel-flow
-  // gekozen). Geen relatietype- of listing-eis.
-  const heeftEigenaar = await prisma.horsePerson.count({
-    where: { horseId, isOwner: true },
-  })
-  if (heeftEigenaar === 0) {
-    throw new Error('Koppel eerst een eigenaar aan het paard.')
+  // er een eigenaar is (de leaser wordt pas in de opstel-flow gekozen). Bij een
+  // stal-eigen paard (Horse.eigendom = STAL) is de stal de eigenaar en is geen
+  // gekoppelde eigenaar-User nodig; bij een particulier paard moet er een HorsePerson
+  // met isOwner = true zijn. Geen relatietype- of listing-eis.
+  if (horse.eigendom !== 'STAL') {
+    const aantalEigenaren = await prisma.horsePerson.count({
+      where: { horseId, isOwner: true },
+    })
+    if (aantalEigenaren === 0) {
+      throw new Error('Koppel eerst een eigenaar aan het paard.')
+    }
   }
 
   const contract = await prisma.contract.create({
@@ -790,15 +794,25 @@ export async function updateLeaseContract(
   const startDateStr = (formData.get('startDate') as string)?.trim()
 
   if (!counterpartyUserId) {
-    throw new Error('Kies een wederpartij (paardeigenaar).')
+    throw new Error('Kies een leaser.')
   }
 
-  // De wederpartij moet een eigenaar van dit paard zijn.
-  const ownerLink = await prisma.horsePerson.findUnique({
-    where: { horseId_userId: { horseId, userId: counterpartyUserId } },
-  })
-  if (!ownerLink || !ownerLink.isOwner) {
-    throw new Error('De gekozen wederpartij is geen eigenaar van dit paard.')
+  // De wederpartij van een leasecontract is de LEASER (niet de eigenaar — de
+  // eigenaar-kant volgt uit Horse.eigendom: de stal of de particuliere eigenaar).
+  // De leaser hoeft dus geen eigenaar te zijn, maar moet wel bij dit paard of deze
+  // stal horen: een aan het paard gekoppelde persoon (HorsePerson, ongeacht rol)
+  // óf een lid van de stal. Zo blijven bestaande lease-contracten geldig en kan bij
+  // een stal-eigen paard een leaser uit de stalleden gekozen worden.
+  const [persoonLink, stalLid] = await Promise.all([
+    prisma.horsePerson.findUnique({
+      where: { horseId_userId: { horseId, userId: counterpartyUserId } },
+    }),
+    prisma.stableMember.findUnique({
+      where: { stableId_userId: { stableId: contract.stableId, userId: counterpartyUserId } },
+    }),
+  ])
+  if (!persoonLink && !stalLid) {
+    throw new Error('De gekozen leaser hoort niet bij dit paard of deze stal.')
   }
 
   const lease = leesLeaseContractForm(formData, leaseType)

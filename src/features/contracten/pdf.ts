@@ -69,7 +69,21 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
           logoPath: true,
         },
       },
-      horse: { select: { id: true, name: true, photoPath: true } },
+      horse: {
+        select: {
+          id: true,
+          name: true,
+          photoPath: true,
+          eigendom: true,
+          // Particuliere eigenaar(s) van het paard, voor de eigenaar-kant van een
+          // leasecontract (de counterparty daar is de leaser, niet de eigenaar).
+          people: {
+            where: { isOwner: true },
+            select: { user: { select: { name: true, email: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      },
       counterparty: { select: { name: true, email: true } },
     },
   })
@@ -80,11 +94,24 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
     [contract.stable.postalCode, contract.stable.city].filter(Boolean).join(' '),
   ].filter((d) => d && d.trim().length > 0)
 
+  // Eigenaar-kant van het document. Bij stalling is de counterparty de eigenaar.
+  // Bij lease is de counterparty de LEASER; de eigenaar volgt dan uit Horse.eigendom:
+  // de stal zelf (STAL) of de particuliere eigenaar (HorsePerson.isOwner).
+  const particuliereEigenaar =
+    contract.horse.people[0]?.user.name ??
+    contract.horse.people[0]?.user.email ??
+    'Onbekende eigenaar'
+  const eigenaarNaam =
+    contract.family === 'LEASE'
+      ? contract.horse.eigendom === 'STAL'
+        ? contract.stable.name
+        : particuliereEigenaar
+      : contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende eigenaar'
+
   return {
     stalNaam: contract.stable.name,
     stalAdres: adresDelen.length > 0 ? adresDelen.join(', ') : null,
-    eigenaarNaam:
-      contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende eigenaar',
+    eigenaarNaam,
     paardNaam: contract.horse.name,
     // Eigen stallogo (#98) als data-URL; null = standaard Velaro-logo.
     stalLogoDataUrl: contract.stable.logoPath

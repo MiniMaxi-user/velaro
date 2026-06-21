@@ -1,6 +1,6 @@
 # Gearchiveerde stories — kolom "Done"
 
-Snapshot van 2026-06-19. 103 item(s). Bron: GitHub Project MiniMaxi-user/2.
+Snapshot van 2026-06-21. 104 item(s). Bron: GitHub Project MiniMaxi-user/2.
 
 - [#1 — Voorstel 4 - Aankomende zorg op het staldashboard](001-voorstel-4-aankomende-zorg-op-het-staldashboard.md)
 - [#2 — Voorstel 2 - Mededelingen per paard (eigenaarscommunicatie)](002-voorstel-2-mededelingen-per-paard-eigenaarscommunicatie.md)
@@ -105,3 +105,4 @@ Snapshot van 2026-06-19. 103 item(s). Bron: GitHub Project MiniMaxi-user/2.
 - [#120 — In het het tabje gezondheid wil ik in de onderliggende tabs de toevoegen knop rechts uitgelijnd hebben.](120-in-het-het-tabje-gezondheid-wil-ik-in-de-onderliggende-tabs.md)
 - [#122 — In contracten de validatie meldingen verwijderen](122-in-contracten-de-validatie-meldingen-verwijderen.md)
 - [#124 — Upload paard foto verbeteren.](124-upload-paard-foto-verbeteren.md)
+- [#139 — Datamodel: expliciet eigendom (stal/particulier) op het paard](139-datamodel-expliciet-eigendom-stal-particulier-op-het-paard.md)

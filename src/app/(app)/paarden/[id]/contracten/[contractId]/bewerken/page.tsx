@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth/session'
-import { getHorse } from '@/features/paarden/queries'
+import { getHorse, getStableMembersForHorse } from '@/features/paarden/queries'
 import { getStableRole } from '@/lib/auth/authorization'
 import { prisma } from '@/lib/prisma'
 import ContractStepperForm from '@/features/contracten/ContractStepperForm'
@@ -95,6 +95,25 @@ export default async function BewerkContractPage({ params }: Props) {
     const leaseAction = updateLeaseContract.bind(null, id, contractId)
     const leaseBijlagen = await getBijlagenVoorContract(contractId)
 
+    // Leaser-kandidaten: de leaser is de wederpartij van een leasecontract (niet de
+    // eigenaar — die volgt uit Horse.eigendom). Bron = aan het paard gekoppelde
+    // personen + de stalleden, gededupliceerd op userId. Zo kan ook bij een stal-eigen
+    // paard (zonder gekoppelde eigenaar) een leaser gekozen worden.
+    const stalleden = await getStableMembersForHorse(id)
+    const leaserMap = new Map<string, { userId: string; label: string }>()
+    for (const p of horse.people) {
+      leaserMap.set(p.user.id, {
+        userId: p.user.id,
+        label: p.user.name ?? p.user.email,
+      })
+    }
+    for (const m of stalleden) {
+      if (!leaserMap.has(m.id)) {
+        leaserMap.set(m.id, { userId: m.id, label: m.name ?? m.email })
+      }
+    }
+    const leaserOpties = Array.from(leaserMap.values())
+
     return (
       <main className="page-container">
         <div className="page-header">
@@ -119,7 +138,7 @@ export default async function BewerkContractPage({ params }: Props) {
           contractId={contractId}
           leaseType={leaseType}
           action={leaseAction}
-          owners={owners}
+          leasers={leaserOpties}
           defaultCounterpartyUserId={contract.counterpartyUserId ?? undefined}
           defaultStartDate={defaultStartDate}
           lease={lease}

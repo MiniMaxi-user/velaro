@@ -1,4 +1,9 @@
-import type { HorseSex, HorseRelatietype, HorseStallingsvorm } from '@prisma/client'
+import type {
+  HorseSex,
+  HorseRelatietype,
+  HorseStallingsvorm,
+  HorseEigendom,
+} from '@prisma/client'
 
 export const DISCIPLINE_OPTIES = [
   'Dressuur',
@@ -27,6 +32,23 @@ export const RELATIETYPE_LABELS: Record<HorseRelatietype, string> = {
   OPFOKPAARD: 'Opfokpaard',
   REVALIDATIEPAARD: 'Revalidatiepaard',
   RUSTPAARD: 'Rustpaard',
+}
+
+// Eigendom (STAL / PARTICULIER). Nederlandse UI-labels.
+export const EIGENDOM_LABELS: Record<HorseEigendom, string> = {
+  STAL: 'Deze stal',
+  PARTICULIER: 'Particuliere eigenaar',
+}
+
+// Heeft het paard een eigenaar voor contractdoeleinden? Bij STAL-eigendom is de stal
+// de eigenaar (altijd waar); bij een particuliere eigenaar moet er een gekoppelde
+// HorsePerson met isOwner = true zijn. Bron van waarheid voor de contract-poort.
+export function heeftEigenaar(args: {
+  eigendom: HorseEigendom
+  people: { isOwner: boolean }[]
+}): boolean {
+  if (args.eigendom === 'STAL') return true
+  return args.people.some((p) => p.isOwner)
 }
 
 // As 2 — Stallingsvorm (afgenomen dienst). Nederlandse UI-labels.

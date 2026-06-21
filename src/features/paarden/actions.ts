@@ -5,7 +5,12 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { getStableRole } from '@/lib/auth/authorization'
-import type { HorseSex, HorseRelatietype, HorseStallingsvorm } from '@prisma/client'
+import type {
+  HorseSex,
+  HorseRelatietype,
+  HorseStallingsvorm,
+  HorseEigendom,
+} from '@prisma/client'
 import { getUserStable } from './queries'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -112,6 +117,27 @@ export async function updateHorse(id: string, formData: FormData) {
 
   revalidatePath(`/paarden/${id}`)
   redirect(`/paarden/${id}`)
+}
+
+/**
+ * Zet het eigendom van het paard: STAL (de stal zelf is eigenaar) of PARTICULIER
+ * (een externe, particuliere eigenaar via HorsePerson). Bron van waarheid voor de
+ * contract-poort en de eigenaar-kant van (lease)contracten.
+ */
+export async function setHorseEigendom(
+  horseId: string,
+  eigendom: HorseEigendom
+): Promise<{ error: string } | undefined> {
+  const ctx = await getStaffHorse(horseId)
+  if (ctx.error) return { error: ctx.error }
+
+  if (eigendom !== 'STAL' && eigendom !== 'PARTICULIER') {
+    return { error: 'Ongeldige eigendomswaarde' }
+  }
+
+  await prisma.horse.update({ where: { id: horseId }, data: { eigendom } })
+
+  revalidatePath(`/paarden/${horseId}`)
 }
 
 // ── Personen (eigenaar / bereider) ──────────────────────────────────────────
