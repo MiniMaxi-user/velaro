@@ -12,6 +12,8 @@ import {
   werkFactuurregelBij,
   verwijderFactuurregel,
   voorvulRegelsUitContract,
+  maakFactuurDefinitief,
+  getFactuurPdfUrl,
 } from '@/features/facturen/actions'
 import {
   berekenFactuurTotalen,
@@ -22,6 +24,7 @@ import FactuurKopForm from '@/features/facturen/FactuurKopForm'
 import FactuurRegelsBeheer, {
   type RegelWeergave,
 } from '@/features/facturen/FactuurRegelsBeheer'
+import FactuurDefinitiefActie from '@/features/facturen/FactuurDefinitiefActie'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -87,13 +90,31 @@ export default async function FactuurBewerkenPage({ params }: Props) {
       </div>
 
       {!isConcept ? (
-        <div className="empty-state">
-          <div className="empty-state__title">Deze factuur is geen concept meer</div>
-          <p>
-            Een factuur kan alleen worden bewerkt zolang deze de status concept heeft. De
-            huidige status is {invoice.status.toLowerCase()}.
-          </p>
-        </div>
+        <>
+          <div className="empty-state">
+            <div className="empty-state__title">Deze factuur is geen concept meer</div>
+            <p>
+              Een factuur kan alleen worden bewerkt zolang deze de status concept heeft. De
+              huidige status is {invoice.status.toLowerCase()}.
+            </p>
+          </div>
+
+          <div className="panel" style={{ marginTop: 'var(--velaro-space-8)' }}>
+            <div className="panel-header">
+              <span className="panel-title">Definitieve factuur</span>
+              <span className="badge badge-neutral">{invoice.status.toLowerCase()}</span>
+            </div>
+            <div className="panel-body">
+              <FactuurDefinitiefActie
+                isConcept={false}
+                heeftRegels={invoice.lines.length > 0}
+                invoiceNumber={invoice.invoiceNumber}
+                definitiefAction={maakFactuurDefinitief.bind(null, invoice.id)}
+                pdfUrlAction={getFactuurPdfUrl.bind(null, invoice.id)}
+              />
+            </div>
+          </div>
+        </>
       ) : (
         <>
           <div className="panel">
@@ -170,6 +191,21 @@ export default async function FactuurBewerkenPage({ params }: Props) {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div className="panel" style={{ marginTop: 'var(--velaro-space-8)' }}>
+            <div className="panel-header">
+              <span className="panel-title">Factuur definitief maken</span>
+            </div>
+            <div className="panel-body">
+              <FactuurDefinitiefActie
+                isConcept
+                heeftRegels={invoice.lines.length > 0}
+                invoiceNumber={invoice.invoiceNumber}
+                definitiefAction={maakFactuurDefinitief.bind(null, invoice.id)}
+                pdfUrlAction={getFactuurPdfUrl.bind(null, invoice.id)}
+              />
             </div>
           </div>
         </>

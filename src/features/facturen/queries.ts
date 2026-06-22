@@ -263,3 +263,19 @@ export async function getSignedUrlVoorFactuur(
 
   return getSignedUrlVoorFactuurPdf(storagePath)
 }
+
+// Dunne wrapper ([Fact 05] #150) die het storagePath van het *laatste* InvoiceDocument
+// opzoekt (newest-first, net als getSignedUrlVoorContract het laatste ContractDocument
+// pakt) en doorgeeft aan getSignedUrlVoorFactuur. De autorisatie wordt niet
+// gedupliceerd: getSignedUrlVoorFactuur dwingt die af. Is er nog geen PDF, dan null.
+export async function getSignedUrlVoorLaatsteFactuurDocument(
+  userId: string,
+  invoiceId: string,
+): Promise<string | null> {
+  const document = await prisma.invoiceDocument.findFirst({
+    where: { invoiceId },
+    orderBy: { createdAt: 'desc' },
+    select: { storagePath: true },
+  })
+  return getSignedUrlVoorFactuur(userId, invoiceId, document?.storagePath ?? null)
+}

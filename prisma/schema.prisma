@@ -843,6 +843,8 @@ model Invoice {
   notes String?
 
   lines InvoiceLine[]
+  // Gegenereerde factuur-PDF's (Fact 05). Laatste document = de actuele PDF.
+  documents InvoiceDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -880,6 +882,43 @@ enum InvoiceStatus {
   BETAALD
   VERVALLEN
   GEANNULEERD
+}
+
+// ── Gegenereerde factuur-PDF (Fact 05) ────────────────────────────────────────
+// Spiegelt ContractDocument: de gegenereerde factuur-PDF wordt in een privé
+// Supabase Storage-bucket opgeslagen en hier per factuur gekoppeld via het
+// storagePath (key binnen de bucket). Inzage loopt via een signed URL met dezelfde
+// leesrechten als de eigenaar-/stalweergave (Fact 02). Het laatste document wint
+// (newest-first), zoals bij ContractDocument.
+model InvoiceDocument {
+  id        String  @id @default(uuid()) @db.Uuid
+  invoiceId String  @db.Uuid
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  // Pad/key van het bestand binnen de Supabase Storage-bucket.
+  storagePath String
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+// ── Race-safe, jaargebonden factuurnummer-reeks (Fact 05) ─────────────────────
+// Per stal en per jaar een eigen, lopende teller. Het ophogen gebeurt atomair
+// binnen dezelfde transactie als het toekennen van het factuurnummer (upsert met
+// increment), zodat parallelle "definitief maken"-acties geen dubbel of
+// overgeslagen nummer kunnen produceren. De @unique op Invoice.invoiceNumber blijft
+// het harde DB-vangnet. Bij jaarwissel begint een nieuwe rij bij 1.
+model InvoiceNumberSequence {
+  id         String @id @default(uuid()) @db.Uuid
+  stableId   String @db.Uuid
+  year       Int
+  lastNumber Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([stableId, year])
 }
 
 // Toegestane btw-tarieven. De numerieke percentages (0/9/21%) worden in de app-laag

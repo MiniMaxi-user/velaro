@@ -14,9 +14,11 @@ import {
 import {
   isGeldigeFactuurOntvanger,
   isContractVanStable,
+  getSignedUrlVoorLaatsteFactuurDocument,
 } from './queries'
 import { berekenFactuurTotalen, type RuweFactuurregel } from './berekeningen'
 import { voorvulRegelsUitContractConfig } from './contractVoorvullen'
+import { genereerEnSlaFactuurPdfOp } from './pdf'
 
 // ── Factuur-beheeracties ([Fact 03] #148) ────────────────────────────────────
 // Beheer-UI (concept opstellen + handmatige regels) bovenop het Fact 02-fundament.
@@ -445,4 +447,79 @@ export async function voorvulRegelsUitContract(invoiceId: string): Promise<void>
   })
 
   revalidatePath(`/stal/facturen/${invoiceId}/bewerken`)
+}
+
+// Formatteert een jaargebonden volgnummer als YYYY-NNNN (bv. 2026-0001). Sorteerbaar en
+// leesbaar; de teller begint per stal per jaar bij 1.
+function formatFactuurnummer(year: number, volgnummer: number): string {
+  return `${year}-${String(volgnummer).padStart(4, '0')}`
+}
+
+/**
+ * Maakt een concept-factuur definitief ([Fact 05] #150).
+ *
+ * Server-side afgedwongen (CLAUDE.md):
+ *  - beheer-rol op de uitgevende stal (Fact 02-guard assertCanManageInvoice),
+ *  - de factuur moet (nog) CONCEPT zijn — geen dubbel nummeren,
+ *  - er moet minimaal één regel zijn — een lege factuur kan niet definitief.
+ *
+ * Bij het definitief maken wordt **binnen één transactie** een uniek, opvolgend
+ * factuurnummer toegekend (race-safe: atomaire teller per stal/jaar via upsert+increment),
+ * `invoiceDate` (indien leeg) op vandaag gezet en de status naar VERZONDEN gezet. De
+ * @unique op Invoice.invoiceNumber is het harde DB-vangnet. Pas ná de geslaagde
+ * transactie wordt de PDF gegenereerd en opgeslagen (die heeft het nummer nodig).
+ */
+export async function maakFactuurDefinitief(invoiceId: string): Promise<void> {
+  const user = await getAuthUser()
+  if (!user) redirect('/login')
+  const invoice = await assertCanManageInvoice(user.id, invoiceId)
+
+  if (invoice.status !== 'CONCEPT') {
+    throw new Error('Alleen een concept-factuur kan definitief worden gemaakt.')
+  }
+  if (invoice.lines.length === 0) {
+    throw new Error('Een factuur zonder regels kan niet definitief worden gemaakt.')
+  }
+
+  const vandaag = new Date()
+  const jaar = vandaag.getFullYear()
+
+  // Atomair: teller per (stal, jaar) ophogen en het factuurnummer + datum + status in
+  // dezelfde transactie schrijven, zodat parallelle acties nooit hetzelfde nummer
+  // toekennen. De upsert-increment vormt de sluitende race-safe variant; de @unique op
+  // invoiceNumber blijft het DB-vangnet.
+  await prisma.$transaction(async (tx) => {
+    const sequence = await tx.invoiceNumberSequence.upsert({
+      where: { stableId_year: { stableId: invoice.stableId, year: jaar } },
+      create: { stableId: invoice.stableId, year: jaar, lastNumber: 1 },
+      update: { lastNumber: { increment: 1 } },
+    })
+    const invoiceNumber = formatFactuurnummer(jaar, sequence.lastNumber)
+
+    await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        invoiceNumber,
+        invoiceDate: invoice.invoiceDate ?? vandaag,
+        status: 'VERZONDEN',
+      },
+    })
+  })
+
+  // PDF genereren + opslaan ná de geslaagde nummering (de PDF toont het nummer).
+  await genereerEnSlaFactuurPdfOp(invoiceId)
+
+  revalidatePath(`/stal/facturen/${invoiceId}/bewerken`)
+}
+
+/**
+ * Geeft een tijdelijke (signed) URL terug voor de PDF van een factuur ([Fact 05] #150),
+ * of null wanneer er (nog) geen PDF is. De autorisatie wordt door de Fact 02-helper
+ * afgedwongen (ontvanger: eigen + niet-CONCEPT; stalrol: eigen stal). Bedoeld als
+ * server-action voor de "PDF openen"-knop op de bewerk-pagina.
+ */
+export async function getFactuurPdfUrl(invoiceId: string): Promise<string | null> {
+  const user = await getAuthUser()
+  if (!user) redirect('/login')
+  return getSignedUrlVoorLaatsteFactuurDocument(user.id, invoiceId)
 }
