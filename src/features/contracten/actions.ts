@@ -76,7 +76,7 @@ import {
 import {
   genereerEnSlaContractPdfOp,
   getSignedUrlVoorContract,
-  renderContractPdfBuffer,
+  renderSamengevoegdContractPdf,
 } from './pdf'
 import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
 import { getPaardFotoDataUrl } from '@/features/paarden/paardFotoStorage'
@@ -1510,7 +1510,8 @@ export async function previewContractPdf(
     select: { categorie: true, bestandsnaam: true },
   })
 
-  const buffer = await renderContractPdfBuffer(
+  const buffer = await renderSamengevoegdContractPdf(
+    contractId,
     {
       currentVersion: contract.currentVersion,
       startDate: contract.startDate,
@@ -2310,6 +2311,36 @@ export async function verwijderContractBijlage(
   }
 
   await verwijderBijlage(bijlageId)
+
+  revalidatePath(`/paarden/${horseId}/contracten/${contractId}/bewerken`)
+  revalidatePath(`/paarden/${horseId}`)
+}
+
+// Zet — per concept-contract — de algemene voorwaarden aan of uit (#143). Aangevinkt
+// betekent dat de stalniveau-AV-PDF wordt meegevoegd in het samengevoegde
+// contractdocument. Server-side afgedwongen: alleen OWNER/STAFF, alleen bij CONCEPT.
+// De vlag wordt onder config.algemeneVoorwaarden bewaard; bestaande config-sleutels
+// blijven behouden.
+export async function setAlgemeneVoorwaardenMeegevoegd(
+  horseId: string,
+  contractId: string,
+  meegevoegd: boolean,
+) {
+  const { contract } = await getEditableConceptContract(horseId, contractId)
+
+  const bestaandeConfig =
+    contract.config &&
+    typeof contract.config === 'object' &&
+    !Array.isArray(contract.config)
+      ? (contract.config as Record<string, unknown>)
+      : {}
+
+  await prisma.contract.update({
+    where: { id: contractId },
+    data: {
+      config: { ...bestaandeConfig, algemeneVoorwaarden: { meegevoegd } },
+    },
+  })
 
   revalidatePath(`/paarden/${horseId}/contracten/${contractId}/bewerken`)
   revalidatePath(`/paarden/${horseId}`)

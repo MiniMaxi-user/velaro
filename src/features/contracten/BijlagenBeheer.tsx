@@ -9,9 +9,11 @@ import {
 } from './bijlagenDiensten'
 import {
   getBijlageUrlVoorStaf,
+  setAlgemeneVoorwaardenMeegevoegd,
   uploadContractBijlage,
   verwijderContractBijlage,
 } from './actions'
+import InfoTooltip from '@/components/InfoTooltip'
 
 // ── Bijlagen koppelen/beheren bij een concept-contract (STAL-16) ─────────────
 // Door de stal aangeleverde bijlagen (stalreglement, voerschema, prijslijst, kopie
@@ -30,15 +32,41 @@ export default function BijlagenBeheer({
   horseId,
   contractId,
   bijlagen,
+  heeftAlgemeneVoorwaarden,
+  algemeneVoorwaardenMeegevoegd,
 }: {
   horseId: string
   contractId: string
   bijlagen: Bijlage[]
+  // Of de stal een algemene-voorwaarden-PDF heeft geüpload (stalniveau). Zonder
+  // AV-PDF is er niets mee te voegen en tonen we enkel een hint richting stalbeheer.
+  heeftAlgemeneVoorwaarden: boolean
+  // Of de AV-PDF voor dit contract is aangevinkt (= meegevoegd in het samengevoegde
+  // document). Default aan wanneer de stal een AV-PDF heeft (#143).
+  algemeneVoorwaardenMeegevoegd: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [avMeegevoegd, setAvMeegevoegd] = useState(algemeneVoorwaardenMeegevoegd)
   const formRef = useRef<HTMLFormElement>(null)
+
+  function handleAvToggle(meegevoegd: boolean) {
+    setAvMeegevoegd(meegevoegd)
+    setError(null)
+    startTransition(async () => {
+      try {
+        await setAlgemeneVoorwaardenMeegevoegd(horseId, contractId, meegevoegd)
+        router.refresh()
+      } catch (e) {
+        // Bij een fout de toggle terugzetten naar de vorige stand.
+        setAvMeegevoegd(!meegevoegd)
+        setError(
+          e instanceof Error ? e.message : 'Algemene voorwaarden aan/uit zetten is mislukt.',
+        )
+      }
+    })
+  }
 
   function handleUpload(formData: FormData) {
     setError(null)
@@ -81,7 +109,47 @@ export default function BijlagenBeheer({
 
   return (
     <div className="form-section" style={{ marginTop: 'var(--velaro-space-6)' }}>
-      <div className="form-section-title">Gekoppelde bijlagen</div>
+      <div className="form-section-title">
+        Algemene voorwaarden
+        <InfoTooltip
+          label="Algemene voorwaarden"
+          text="Algemene voorwaarden = de juridische voorwaarden die bij de overeenkomst horen (bijv. aansprakelijkheid & risico, verzekering, privacy/AVG, betalings- en opzegvoorwaarden). Eénmalig per stal als PDF geüpload en per contract aan/uit te zetten; aangevinkt = meegevoegd in het ene contractdocument."
+        />
+      </div>
+      {heeftAlgemeneVoorwaarden ? (
+        <label
+          className="profiel-checkbox-label"
+          style={{ marginBottom: 'var(--velaro-space-2)' }}
+        >
+          <input
+            className="profiel-checkbox"
+            type="checkbox"
+            checked={avMeegevoegd}
+            onChange={(e) => handleAvToggle(e.target.checked)}
+            disabled={pending}
+          />
+          <span>
+            De algemene voorwaarden van de stal meevoegen in het samengevoegde
+            contractdocument.
+          </span>
+        </label>
+      ) : (
+        <p className="form-hint" style={{ marginBottom: 'var(--velaro-space-4)' }}>
+          Er is nog geen algemene-voorwaarden-PDF voor deze stal geüpload. Upload die
+          eerst in het stalbeheer om hem per contract te kunnen meevoegen.
+        </p>
+      )}
+
+      <div
+        className="form-section-title"
+        style={{ marginTop: 'var(--velaro-space-5)' }}
+      >
+        Gekoppelde bijlagen
+        <InfoTooltip
+          label="Stalreglement"
+          text="Stalreglement = de praktische huisregels van de stal (bijv. openingstijden, gebruik van faciliteiten, veiligheid, parkeren, gedrag op het erf). Een document dat als pagina's wordt meegezonden met het contract (geen contractuele clausules)."
+        />
+      </div>
       <p className="form-hint" style={{ marginBottom: 'var(--velaro-space-3)' }}>
         Koppel documenten aan dit concept-contract (PDF of afbeelding, max. 10 MB). Per
         categorie kun je meerdere of geen bijlagen koppelen.

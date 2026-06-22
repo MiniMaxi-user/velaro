@@ -5,12 +5,20 @@ import { prisma } from '@/lib/prisma'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStableLogoDataUrl } from '@/features/stal/logoStorage'
 import { getPaardFotoDataUrl } from '@/features/paarden/paardFotoStorage'
+import { getAlgemeneVoorwaardenBytes } from '@/features/stal/algemeneVoorwaardenStorage'
 import { ContractPdfDocument } from './ContractPdfDocument'
 import {
   bouwContractPdfData,
   type PdfContextInput,
   type PdfContractInput,
 } from './pdfData'
+import { leesAlgemeneVoorwaardenConfig } from './bijlagenDiensten'
+import { getBijlageBytes } from './bijlagenStorage'
+import {
+  mergeSoortUitPad,
+  voegContractDocumentSamen,
+  type MergeOnderdeel,
+} from './pdfMerge'
 
 // ── PDF-generatie & opslag (STAL-12) ─────────────────────────────────────────
 // Server-side generatie met @react-pdf/renderer (geen headless browser). De PDF
@@ -133,6 +141,71 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
   }
 }
 
+// Categorieën die als pagina's meegevoegd worden in het samengevoegde document, in
+// de vaste volgorde na de algemene voorwaarden (#143). De gestructureerde prijslijst
+// (extra diensten) blijft in de contract-PDF zelf; hier gaat het om de geüploade
+// PRIJSLIJST-bijlage (los document).
+const MERGE_BIJLAGE_VOLGORDE = ['STALREGLEMENT', 'VOERSCHEMA', 'PRIJSLIJST'] as const
+
+// Verzamelt de mee te voegen onderdelen voor één contract in de vaste volgorde:
+// algemene voorwaarden (stalniveau-PDF, alleen wanneer aangevinkt) → stalreglement →
+// voerschema → prijslijst. Alleen aanwezige onderdelen komen terug. Afbeeldings-
+// bijlagen worden meegenomen; onbekende types worden overgeslagen.
+async function verzamelMergeOnderdelen(contractId: string): Promise<MergeOnderdeel[]> {
+  const contract = await prisma.contract.findUnique({
+    where: { id: contractId },
+    select: {
+      config: true,
+      stableId: true,
+      stable: { select: { algemeneVoorwaardenPath: true } },
+    },
+  })
+  if (!contract) return []
+
+  const onderdelen: MergeOnderdeel[] = []
+
+  // 1. Algemene voorwaarden (stalniveau-PDF) — alleen wanneer per contract aangevinkt
+  //    én de stal een AV-PDF heeft. Default volgt uit de aanwezigheid van de AV-PDF.
+  const heeftAv = Boolean(contract.stable.algemeneVoorwaardenPath)
+  const avConfig = leesAlgemeneVoorwaardenConfig(contract.config, heeftAv)
+  if (heeftAv && avConfig.meegevoegd) {
+    const avBytes = await getAlgemeneVoorwaardenBytes(contract.stableId)
+    if (avBytes) onderdelen.push({ bytes: avBytes, soort: 'pdf' })
+  }
+
+  // 2–4. Geüploade bijlagen in vaste volgorde (stalreglement → voerschema → prijslijst).
+  //      Binnen een categorie op uploadvolgorde (oudste eerst).
+  const bijlagen = await prisma.contractBijlage.findMany({
+    where: { contractId, categorie: { in: [...MERGE_BIJLAGE_VOLGORDE] } },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, categorie: true, storagePath: true },
+  })
+  for (const categorie of MERGE_BIJLAGE_VOLGORDE) {
+    for (const bijlage of bijlagen.filter((b) => b.categorie === categorie)) {
+      const soort = mergeSoortUitPad(bijlage.storagePath)
+      if (!soort) continue
+      const bytes = await getBijlageBytes(bijlage.id)
+      if (bytes) onderdelen.push({ bytes, soort })
+    }
+  }
+
+  return onderdelen
+}
+
+// Rendert de contract-PDF voor een opgeslagen contract en voegt — wanneer van
+// toepassing — de algemene voorwaarden en bijlagen samen tot één document (#143).
+// Gebruikt zowel bij het opslaan (genereerEnSlaContractPdfOp) als bij de preview,
+// zodat beide hetzelfde samengevoegde resultaat tonen.
+export async function renderSamengevoegdContractPdf(
+  contractId: string,
+  contractInput: PdfContractInput,
+  context: PdfContextInput,
+): Promise<Buffer> {
+  const basis = await renderContractPdfBuffer(contractInput, context)
+  const onderdelen = await verzamelMergeOnderdelen(contractId)
+  return voegContractDocumentSamen(basis, onderdelen)
+}
+
 // Genereert de PDF voor een opgeslagen contract en schrijft die naar Supabase
 // Storage + koppelt een ContractDocument-rij aan de huidige versie. Wordt gebruikt
 // bij aanbieden (STAL-08) en bij een nieuwe versie (STAL-11). Faalt de generatie of
@@ -148,7 +221,8 @@ export async function genereerEnSlaContractPdfOp(contractId: string): Promise<vo
     orderBy: { createdAt: 'asc' },
     select: { categorie: true, bestandsnaam: true },
   })
-  const buffer = await renderContractPdfBuffer(
+  const buffer = await renderSamengevoegdContractPdf(
+    contractId,
     {
       currentVersion: contract.currentVersion,
       startDate: contract.startDate,

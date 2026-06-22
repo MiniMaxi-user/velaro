@@ -66,6 +66,41 @@ export function leesBijlagenConfig(
   }
 }
 
+// ── Algemene voorwaarden meevoegen (config.algemeneVoorwaarden) (#143) ───────
+// De algemene voorwaarden zijn een op stalniveau geüploade PDF (Stable.algemene
+// VoorwaardenPath). Per contract is in te stellen of die PDF wordt meegevoegd in het
+// samengevoegde contractdocument. We bewaren enkel de aan/uit-vlag onder config; de
+// default (aan wanneer de stal een AV-PDF heeft) wordt bij het opstellen toegepast.
+
+export type AlgemeneVoorwaardenConfig = {
+  meegevoegd: boolean
+}
+
+export const LEGE_ALGEMENE_VOORWAARDEN: AlgemeneVoorwaardenConfig = {
+  meegevoegd: false,
+}
+
+// Leest de AV-instelling defensief uit het config-JSON. Wanneer de sleutel ontbreekt
+// (oudere contracten), geeft de meegegeven default terug — zo geldt "default aan
+// wanneer de stal een AV-PDF heeft" zonder dat oude contracten gemigreerd hoeven.
+export function leesAlgemeneVoorwaardenConfig(
+  config: Prisma.JsonValue | null | undefined,
+  defaultMeegevoegd = false,
+): AlgemeneVoorwaardenConfig {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return { meegevoegd: defaultMeegevoegd }
+  }
+  const root = (config as Record<string, unknown>).algemeneVoorwaarden
+  if (!root || typeof root !== 'object' || Array.isArray(root)) {
+    return { meegevoegd: defaultMeegevoegd }
+  }
+  const r = root as Record<string, unknown>
+  if (typeof r.meegevoegd !== 'boolean') {
+    return { meegevoegd: defaultMeegevoegd }
+  }
+  return { meegevoegd: r.meegevoegd }
+}
+
 // ── Extra diensten / prijslijst (config.extraDiensten) ───────────────────────
 // Een lijst van posten naast de reguliere pensionprijs (STAL-05). Per post een
 // omschrijving, een bedrag en een frequentie. Geen facturatie/inning — enkel

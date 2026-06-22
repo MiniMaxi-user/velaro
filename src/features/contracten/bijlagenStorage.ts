@@ -86,6 +86,22 @@ export async function getSignedUrlVoorBijlage(
   return data.signedUrl
 }
 
+// Haalt de ruwe bytes van één bijlage op (voor de server-side PDF-merge), of null
+// wanneer die niet bestaat of het downloaden mislukt.
+export async function getBijlageBytes(bijlageId: string): Promise<Buffer | null> {
+  const bijlage = await prisma.contractBijlage.findUnique({ where: { id: bijlageId } })
+  if (!bijlage) return null
+
+  const supabase = createAdminClient()
+  const { data, error } = await supabase.storage
+    .from(CONTRACT_BIJLAGEN_BUCKET)
+    .download(bijlage.storagePath)
+  if (error || !data) return null
+
+  const arrayBuffer = await data.arrayBuffer()
+  return Buffer.from(arrayBuffer)
+}
+
 // Haalt de bijlagen van een contract op (nieuwste eerst).
 export async function getBijlagenVoorContract(contractId: string) {
   return prisma.contractBijlage.findMany({

@@ -17,6 +17,7 @@ import { leesVerzekeringAansprakelijkheid } from '@/features/contracten/verzeker
 import { leesGezondheidsplicht } from '@/features/contracten/gezondheidsplicht'
 import { leesBerijder } from '@/features/contracten/berijder'
 import {
+  leesAlgemeneVoorwaardenConfig,
   leesBijlagenConfig,
   leesExtraDiensten,
 } from '@/features/contracten/bijlagenDiensten'
@@ -40,8 +41,19 @@ export default async function BewerkContractPage({ params }: Props) {
   const role = await getStableRole(user.id, horse.stableId)
   if (!role) notFound()
 
-  const contract = await prisma.contract.findUnique({ where: { id: contractId } })
+  const contract = await prisma.contract.findUnique({
+    where: { id: contractId },
+    include: { stable: { select: { algemeneVoorwaardenPath: true } } },
+  })
   if (!contract || contract.horseId !== id) notFound()
+
+  // Algemene voorwaarden (#143): de AV-PDF zit op stalniveau. Per contract is in te
+  // stellen of die wordt meegevoegd; default aan wanneer de stal een AV-PDF heeft.
+  const heeftAlgemeneVoorwaarden = Boolean(contract.stable.algemeneVoorwaardenPath)
+  const algemeneVoorwaardenMeegevoegd = leesAlgemeneVoorwaardenConfig(
+    contract.config,
+    heeftAlgemeneVoorwaarden,
+  ).meegevoegd
 
   const isLease = contract.family === 'LEASE'
   const bewerkLabel = isLease ? 'Leasecontract bewerken' : 'Stallingscontract bewerken'
@@ -154,6 +166,8 @@ export default async function BewerkContractPage({ params }: Props) {
             categorie: b.categorie,
             bestandsnaam: b.bestandsnaam,
           }))}
+          heeftAlgemeneVoorwaarden={heeftAlgemeneVoorwaarden}
+          algemeneVoorwaardenMeegevoegd={algemeneVoorwaardenMeegevoegd}
         />
       </main>
     )
@@ -242,6 +256,8 @@ export default async function BewerkContractPage({ params }: Props) {
           categorie: b.categorie,
           bestandsnaam: b.bestandsnaam,
         }))}
+        heeftAlgemeneVoorwaarden={heeftAlgemeneVoorwaarden}
+        algemeneVoorwaardenMeegevoegd={algemeneVoorwaardenMeegevoegd}
       />
     </main>
   )

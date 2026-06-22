@@ -109,6 +109,13 @@ model Stable {
   // een ander logo hebben).
   logoPath String?
 
+  // Algemene voorwaarden (juridische voorwaarden) als geüploade PDF op stalniveau
+  // (#143). Verwijst naar het pad/key binnen de privé Supabase Storage-bucket voor
+  // algemene voorwaarden; null = geen AV ingesteld. Per contract aan/uit te zetten
+  // en — wanneer aan — als pagina's meegevoegd in het samengevoegde contractdocument.
+  // Spiegelt het stallogo-patroon (logoPath, logoStorage.ts).
+  algemeneVoorwaardenPath String?
+
   // Openingstijden (vrij tekstveld, bv. "Ma-vr 07:00-21:00")
   openingHours String?
 

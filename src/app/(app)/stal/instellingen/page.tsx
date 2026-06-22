@@ -4,7 +4,9 @@ import { getAuthUser } from '@/lib/auth/session'
 import { getUserStable } from '@/features/paarden/queries'
 import { getStableRole } from '@/lib/auth/authorization'
 import { getStableLogoSignedUrl } from '@/features/stal/logoStorage'
+import { getAlgemeneVoorwaardenSignedUrl } from '@/features/stal/algemeneVoorwaardenStorage'
 import LogoBeheer from '@/features/stal/LogoBeheer'
+import AlgemeneVoorwaardenBeheer from '@/features/stal/AlgemeneVoorwaardenBeheer'
 
 // ── Stal-instellingen (#98) ──────────────────────────────────────────────────
 // Centrale plek voor instellingen van de actieve stal, alleen voor de OWNER. Eerste
@@ -23,6 +25,7 @@ export default async function StalInstellingenPage() {
   if (role !== 'OWNER') redirect('/stal')
 
   const logoUrl = await getStableLogoSignedUrl(stable.id)
+  const algemeneVoorwaardenUrl = await getAlgemeneVoorwaardenSignedUrl(stable.id)
 
   return (
     <main className="page-container">
@@ -38,8 +41,17 @@ export default async function StalInstellingenPage() {
         </Link>
       </div>
 
-      <div className="card" style={{ maxWidth: 640 }}>
+      <div
+        className="card"
+        style={{
+          maxWidth: 640,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--velaro-space-6)',
+        }}
+      >
         <LogoBeheer logoUrl={logoUrl} />
+        <AlgemeneVoorwaardenBeheer algemeneVoorwaardenUrl={algemeneVoorwaardenUrl} />
       </div>
     </main>
   )
