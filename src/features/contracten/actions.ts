@@ -1425,7 +1425,21 @@ async function bouwPdfContextVoorContract(contractId: string) {
           logoPath: true,
         },
       },
-      horse: { select: { id: true, name: true, photoPath: true } },
+      horse: {
+        select: {
+          id: true,
+          name: true,
+          photoPath: true,
+          eigendom: true,
+          // Particuliere eigenaar(s) — voor de verleaser-kant bij een leasecontract
+          // (waar de counterparty de leaser is, niet de eigenaar).
+          people: {
+            where: { isOwner: true },
+            select: { user: { select: { name: true, email: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      },
       counterparty: { select: { name: true, email: true } },
     },
   })
@@ -1436,13 +1450,31 @@ async function bouwPdfContextVoorContract(contractId: string) {
     [contract.stable.postalCode, contract.stable.city].filter(Boolean).join(' '),
   ].filter((d) => d && d.trim().length > 0)
 
+  // Eigenaar-/verleaser-kant. Bij stalling is de counterparty de eigenaar. Bij lease
+  // is de counterparty de LEASER; de verleaser volgt uit Horse.eigendom (stal of
+  // particuliere eigenaar). Spiegelt bouwContextVoorContract in pdf.ts.
+  const particuliereEigenaar =
+    contract.horse.people[0]?.user.name ??
+    contract.horse.people[0]?.user.email ??
+    'Onbekende eigenaar'
+  const eigenaarNaam =
+    contract.family === 'LEASE'
+      ? contract.horse.eigendom === 'STAL'
+        ? contract.stable.name
+        : particuliereEigenaar
+      : contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende eigenaar'
+  const leaserNaam =
+    contract.family === 'LEASE'
+      ? contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende leaser'
+      : null
+
   return {
     contract,
     context: {
       stalNaam: contract.stable.name,
       stalAdres: adresDelen.length > 0 ? adresDelen.join(', ') : null,
-      eigenaarNaam:
-        contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende eigenaar',
+      eigenaarNaam,
+      leaserNaam,
       paardNaam: contract.horse.name,
       // Eigen stallogo (#98) in de preview; null = standaard Velaro-logo.
       stalLogoDataUrl: contract.stable.logoPath
@@ -1483,6 +1515,9 @@ export async function previewContractPdf(
       currentVersion: contract.currentVersion,
       startDate: contract.startDate,
       config: contract.config,
+      // Familie + leasevorm sturen de PDF-opbouw (stalling- vs. lease-secties + titel).
+      family: contract.family,
+      leaseType: contract.family === 'LEASE' ? (contract.type as LeaseType) : null,
       bijlagen,
     },
     context,

@@ -1,3 +1,4 @@
+import type { LeaseType } from '@prisma/client'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
 import { prisma } from '@/lib/prisma'
@@ -108,10 +109,18 @@ async function bouwContextVoorContract(contractId: string): Promise<PdfContextIn
         : particuliereEigenaar
       : contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende eigenaar'
 
+  // Leaser-kant (alleen bij lease): de counterparty is de leaser. Bij stalling is er
+  // geen aparte leaser.
+  const leaserNaam =
+    contract.family === 'LEASE'
+      ? contract.counterparty?.name ?? contract.counterparty?.email ?? 'Onbekende leaser'
+      : null
+
   return {
     stalNaam: contract.stable.name,
     stalAdres: adresDelen.length > 0 ? adresDelen.join(', ') : null,
     eigenaarNaam,
+    leaserNaam,
     paardNaam: contract.horse.name,
     // Eigen stallogo (#98) als data-URL; null = standaard Velaro-logo.
     stalLogoDataUrl: contract.stable.logoPath
@@ -144,6 +153,9 @@ export async function genereerEnSlaContractPdfOp(contractId: string): Promise<vo
       currentVersion: contract.currentVersion,
       startDate: contract.startDate,
       config: contract.config,
+      // Familie + leasevorm sturen de PDF-opbouw (stalling- vs. lease-secties + titel).
+      family: contract.family,
+      leaseType: contract.family === 'LEASE' ? (contract.type as LeaseType) : null,
       bijlagen,
     },
     context,

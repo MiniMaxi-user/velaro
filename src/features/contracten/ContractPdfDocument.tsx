@@ -236,6 +236,11 @@ function Veld({ label, waarde }: { label: string; waarde: string }) {
 export function ContractPdfDocument({ data }: { data: ContractPdfData }) {
   ensureFonts()
 
+  const isLease = data.family === 'LEASE'
+  // Label van de eigenaar-/verleaser-kant: bij lease is de tegenpartij van de stal de
+  // verleaser (stal of particuliere eigenaar), bij stalling de paardeigenaar.
+  const eigenaarLabel = isLease ? 'Verleaser' : 'Paardeigenaar'
+
   return (
     <Document
       title={`${data.titel} — versie ${data.versie}`}
@@ -259,13 +264,19 @@ export function ContractPdfDocument({ data }: { data: ContractPdfData }) {
         <View style={styles.partijenBlok}>
           <View style={styles.partijenGrid}>
             <Veld label="Pensionstal" waarde={data.partijen.stalNaam} />
-            <Veld label="Paardeigenaar" waarde={data.partijen.eigenaarNaam} />
+            <Veld label={eigenaarLabel} waarde={data.partijen.eigenaarNaam} />
+            {isLease && data.partijen.leaserNaam && (
+              <Veld label="Leaser" waarde={data.partijen.leaserNaam} />
+            )}
             {data.partijen.stalAdres && (
               <Veld label="Adres stal" waarde={data.partijen.stalAdres} />
             )}
             <Veld label="Paard" waarde={data.partijen.paardNaam} />
             {data.partijen.ingangsdatum && (
               <Veld label="Ingangsdatum" waarde={data.partijen.ingangsdatum} />
+            )}
+            {isLease && data.partijen.voogdNaam && (
+              <Veld label="Ouder/voogd berijder" waarde={data.partijen.voogdNaam} />
             )}
           </View>
           {data.paardFotoDataUrl && (
@@ -287,25 +298,41 @@ export function ContractPdfDocument({ data }: { data: ContractPdfData }) {
           </View>
         ))}
 
-        {/* Gereserveerde handtekeningruimte — geen ondertekeningsfunctionaliteit */}
+        {/* Gereserveerde handtekeningruimte — geen ondertekeningsfunctionaliteit.
+            Bij lease: verleaser + leaser, plus een voogd-vak bij minderjarige berijder. */}
         <View style={styles.handtekeningSectie} wrap={false}>
           <Text style={styles.handtekeningTitel}>Ondertekening</Text>
           <View style={styles.handtekeningRij}>
             <View style={styles.handtekeningVak}>
               <View style={styles.handtekeningLijn} />
               <Text style={styles.handtekeningLabel}>
-                Pensionstal — {data.partijen.stalNaam}
+                {isLease
+                  ? `${eigenaarLabel} — ${data.partijen.eigenaarNaam}`
+                  : `Pensionstal — ${data.partijen.stalNaam}`}
               </Text>
               <Text style={styles.handtekeningLabel}>Naam, datum en handtekening</Text>
             </View>
             <View style={styles.handtekeningVak}>
               <View style={styles.handtekeningLijn} />
               <Text style={styles.handtekeningLabel}>
-                Paardeigenaar — {data.partijen.eigenaarNaam}
+                {isLease
+                  ? `Leaser — ${data.partijen.leaserNaam ?? ''}`
+                  : `Paardeigenaar — ${data.partijen.eigenaarNaam}`}
               </Text>
               <Text style={styles.handtekeningLabel}>Naam, datum en handtekening</Text>
             </View>
           </View>
+          {isLease && data.partijen.voogdNaam && (
+            <View style={[styles.handtekeningRij, { marginTop: 20 }]}>
+              <View style={styles.handtekeningVak}>
+                <View style={styles.handtekeningLijn} />
+                <Text style={styles.handtekeningLabel}>
+                  Ouder/voogd berijder — {data.partijen.voogdNaam}
+                </Text>
+                <Text style={styles.handtekeningLabel}>Naam, datum en handtekening</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Voettekst */}
