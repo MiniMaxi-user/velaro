@@ -16,6 +16,7 @@ import {
   isContractVanStable,
 } from './queries'
 import { berekenFactuurTotalen, type RuweFactuurregel } from './berekeningen'
+import { voorvulRegelsUitContractConfig } from './contractVoorvullen'
 
 // ── Factuur-beheeracties ([Fact 03] #148) ────────────────────────────────────
 // Beheer-UI (concept opstellen + handmatige regels) bovenop het Fact 02-fundament.
@@ -362,6 +363,84 @@ export async function verwijderFactuurregel(invoiceId: string, lineId: string): 
 
   await prisma.$transaction(async (tx) => {
     await tx.invoiceLine.delete({ where: { id: lineId } })
+    await herberekenEnSchrijfTotalen(tx, invoiceId)
+  })
+
+  revalidatePath(`/stal/facturen/${invoiceId}/bewerken`)
+}
+
+/**
+ * Vult de factuurregels voor uit het aan de factuur gekoppelde contract ([Fact 04] #149).
+ *
+ * Leidt — op basis van Contract.family (STALLING/LEASE) — de bronregels af met de
+ * voorvul-helper (juiste btw-tarieven, INCL→EXCL teruggerekend) en voegt ze als gewone,
+ * bewerkbare InvoiceLine-regels **achter** de bestaande regels toe (oplopende position),
+ * in één transactie, en herberekent de totalen. Na het voorvullen zijn de regels identiek
+ * aan handmatige regels: ze worden via dezelfde acties bewerkt/verwijderd.
+ *
+ * Server-side afgedwongen (CLAUDE.md):
+ *  - beheer-rol op de uitgevende stal (Fact 02-guard assertCanManageInvoice),
+ *  - alleen bij CONCEPT (assertConcept),
+ *  - er moet een bron-contract gekoppeld zijn dat bij dezelfde stal hoort,
+ *  - geen dubbeling: voorvullen kan alleen op een "verse" concept-factuur (uitsluitend de
+ *    bij aanmaak verplichte regel); is er al meer dan één regel, dan een nette melding.
+ */
+export async function voorvulRegelsUitContract(invoiceId: string): Promise<void> {
+  const user = await getAuthUser()
+  if (!user) redirect('/login')
+  const invoice = await assertCanManageInvoice(user.id, invoiceId)
+  assertConcept(invoice.status)
+
+  if (!invoice.contractId) {
+    throw new Error('Koppel eerst een contract aan deze factuur.')
+  }
+  // Geen dubbeling: voorvullen alleen op een verse concept-factuur (enkel de bij aanmaak
+  // verplichte regel). Is er al meer dan één regel, dan is er al voorgevuld/handmatig
+  // uitgebreid; een tweede voorvulronde zou dezelfde contractregels nogmaals toevoegen.
+  if (invoice.lines.length > 1) {
+    throw new Error(
+      'Voorvullen kan alleen op een nieuwe concept-factuur met één regel. Verwijder eerst de extra regels.',
+    )
+  }
+
+  // Het contract moet bij dezelfde stal horen (Fact 03-controle) en we lezen family +
+  // config voor de afleiding. assertCanManageInvoice selecteert het contract beperkt,
+  // dus halen we family/config gericht op.
+  const contract = await prisma.contract.findFirst({
+    where: { id: invoice.contractId, stableId: invoice.stableId },
+    select: { family: true, config: true },
+  })
+  if (!contract) {
+    throw new Error('Het gekoppelde contract hoort niet bij deze stal.')
+  }
+
+  const bronregels = voorvulRegelsUitContractConfig(contract.family, contract.config)
+  if (bronregels.length === 0) {
+    throw new Error('Het gekoppelde contract bevat geen factureerbare bedragen om voor te vullen.')
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const laatste = await tx.invoiceLine.findFirst({
+      where: { invoiceId },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    })
+    let position = laatste ? laatste.position + 1 : 0
+    for (const regel of bronregels) {
+      const lineTotal = berekenFactuurTotalen([regel]).regels[0].lineTotal
+      await tx.invoiceLine.create({
+        data: {
+          invoiceId,
+          description: regel.description,
+          quantity: regel.quantity,
+          unitPrice: regel.unitPrice,
+          vatRate: regel.vatRate,
+          lineTotal,
+          position,
+        },
+      })
+      position += 1
+    }
     await herberekenEnSchrijfTotalen(tx, invoiceId)
   })
 

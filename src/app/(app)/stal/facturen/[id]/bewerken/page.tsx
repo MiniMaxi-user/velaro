@@ -11,6 +11,7 @@ import {
   voegFactuurregelToe,
   werkFactuurregelBij,
   verwijderFactuurregel,
+  voorvulRegelsUitContract,
 } from '@/features/facturen/actions'
 import {
   berekenFactuurTotalen,
@@ -127,6 +128,8 @@ export default async function FactuurBewerkenPage({ params }: Props) {
                 voegToeAction={voegFactuurregelToe.bind(null, invoice.id)}
                 werkBijAction={werkFactuurregelBij.bind(null, invoice.id)}
                 verwijderAction={verwijderFactuurregel.bind(null, invoice.id)}
+                voorvulAction={voorvulRegelsUitContract.bind(null, invoice.id)}
+                kanVoorvullen={Boolean(invoice.contractId) && invoice.lines.length <= 1}
               />
             </div>
           </div>

@@ -23,17 +23,32 @@ export default function FactuurRegelsBeheer({
   voegToeAction,
   werkBijAction,
   verwijderAction,
+  voorvulAction,
+  kanVoorvullen = false,
 }: {
   regels: RegelWeergave[]
   voegToeAction: (formData: FormData) => Promise<void>
   werkBijAction: (lineId: string, formData: FormData) => Promise<void>
   verwijderAction: (lineId: string) => Promise<void>
+  // Voorvullen uit het gekoppelde contract ([Fact 04] #149). Optioneel: alleen
+  // beschikbaar wanneer er een bron-contract gekoppeld is én de factuur nog "vers" is.
+  voorvulAction?: () => Promise<void>
+  kanVoorvullen?: boolean
 }) {
   const [bewerktId, setBewerktId] = useState<string | null>(null)
   const kanVerwijderen = regels.length > 1
 
   return (
     <div>
+      {voorvulAction && kanVoorvullen ? (
+        <form action={voorvulAction} style={{ marginBottom: 'var(--velaro-space-4)' }}>
+          <SubmitButton
+            label="Regels voorvullen uit contract"
+            loadingLabel="Bezig met voorvullen…"
+          />
+        </form>
+      ) : null}
+
       <table className="gezondheid-tabel">
         <thead>
           <tr>
