@@ -233,6 +233,30 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
     marginTop: 4,
   },
+  // Betaalblok ([Fact 06] #151)
+  betaalBlok: {
+    marginTop: 16,
+    backgroundColor: COLORS.surface2,
+    borderRadius: 6,
+    padding: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.gold,
+  },
+  betaalTitel: {
+    fontFamily: 'Cormorant Garamond',
+    fontWeight: 600,
+    fontSize: 13,
+    color: COLORS.navy,
+    marginBottom: 6,
+  },
+  betaalRegel: {
+    fontSize: 9,
+    color: COLORS.navy,
+    marginBottom: 2,
+  },
+  betaalLabel: {
+    color: COLORS.muted,
+  },
   footer: {
     position: 'absolute',
     bottom: 28,
@@ -339,6 +363,65 @@ export function FactuurPdfDocument({ data }: { data: FactuurPdfData }) {
             <Text style={styles.totaalWaardeSterk}>{data.totaal}</Text>
           </View>
         </View>
+
+        {/* Betaalinstructie ([Fact 06] #151): overboeking of SEPA-incasso-aankondiging. */}
+        {data.betaling && (
+          <View style={styles.betaalBlok} wrap={false}>
+            {data.betaling.wijze === 'OVERBOEKING' ? (
+              <>
+                <Text style={styles.betaalTitel}>Betaling per overboeking</Text>
+                <Text style={styles.betaalRegel}>
+                  Wij verzoeken u het totaalbedrag
+                  {data.vervaldatum ? ` vóór ${data.vervaldatum}` : ''} te voldoen
+                  {data.betaling.stalIban
+                    ? ` op rekening ${data.betaling.stalIban}`
+                    : ''}
+                  {data.betaling.stalTenaamstelling
+                    ? ` t.n.v. ${data.betaling.stalTenaamstelling}`
+                    : ''}
+                  .
+                </Text>
+                <Text style={styles.betaalRegel}>
+                  <Text style={styles.betaalLabel}>Betalingskenmerk: </Text>
+                  {data.factuurnummer}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.betaalTitel}>Automatische incasso (SEPA)</Text>
+                <Text style={styles.betaalRegel}>
+                  Het totaalbedrag wordt automatisch
+                  {data.vervaldatum ? ` rond ${data.vervaldatum}` : ''} van uw rekening
+                  geïncasseerd op basis van de afgegeven doorlopende SEPA-machtiging.
+                </Text>
+                {data.betaling.iban && (
+                  <Text style={styles.betaalRegel}>
+                    <Text style={styles.betaalLabel}>IBAN: </Text>
+                    {data.betaling.iban}
+                  </Text>
+                )}
+                {data.betaling.tenaamstelling && (
+                  <Text style={styles.betaalRegel}>
+                    <Text style={styles.betaalLabel}>Tenaamstelling: </Text>
+                    {data.betaling.tenaamstelling}
+                  </Text>
+                )}
+                {data.betaling.mandaatkenmerk && (
+                  <Text style={styles.betaalRegel}>
+                    <Text style={styles.betaalLabel}>Mandaatkenmerk: </Text>
+                    {data.betaling.mandaatkenmerk}
+                  </Text>
+                )}
+                {data.betaling.mandaatdatum && (
+                  <Text style={styles.betaalRegel}>
+                    <Text style={styles.betaalLabel}>Mandaatdatum: </Text>
+                    {data.betaling.mandaatdatum}
+                  </Text>
+                )}
+              </>
+            )}
+          </View>
+        )}
 
         {/* Opmerking (optioneel). */}
         {data.notes && (

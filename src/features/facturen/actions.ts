@@ -481,13 +481,46 @@ export async function maakFactuurDefinitief(invoiceId: string): Promise<void> {
     throw new Error('Een factuur zonder regels kan niet definitief worden gemaakt.')
   }
 
+  // ── Betaal-momentopname ([Fact 06] #151) ─────────────────────────────────────
+  // Lees de actuele betaalwijze + (bij SEPA) mandaatgegevens van de ontvanger uit het
+  // OwnerBusinessProfile. Bij SEPA-incasso moet er een geldig mandaat geregistreerd zijn
+  // (tenaamstelling, IBAN, mandaatkenmerk en mandaatdatum); ontbreekt dat, dan weigert
+  // het definitief maken. De waarden worden binnen de transactie als momentopname op de
+  // Invoice vastgelegd, zodat een latere mandaatwijziging deze factuur niet verandert.
+  const profiel = invoice.recipientUserId
+    ? await prisma.ownerBusinessProfile.findUnique({
+        where: { userId: invoice.recipientUserId },
+        select: {
+          paymentMethod: true,
+          sepaAccountHolder: true,
+          sepaIban: true,
+          sepaMandateReference: true,
+          sepaMandateDate: true,
+        },
+      })
+    : null
+
+  const paymentMethod = profiel?.paymentMethod ?? 'OVERBOEKING'
+  if (paymentMethod === 'SEPA_INCASSO') {
+    const geldigMandaat =
+      !!profiel?.sepaAccountHolder &&
+      !!profiel?.sepaIban &&
+      !!profiel?.sepaMandateReference &&
+      !!profiel?.sepaMandateDate
+    if (!geldigMandaat) {
+      throw new Error(
+        'De ontvanger betaalt via SEPA-incasso, maar er is geen geldig mandaat geregistreerd. Vul eerst tenaamstelling, IBAN, mandaatkenmerk en mandaatdatum in bij de eigenaar.',
+      )
+    }
+  }
+
   const vandaag = new Date()
   const jaar = vandaag.getFullYear()
 
-  // Atomair: teller per (stal, jaar) ophogen en het factuurnummer + datum + status in
-  // dezelfde transactie schrijven, zodat parallelle acties nooit hetzelfde nummer
-  // toekennen. De upsert-increment vormt de sluitende race-safe variant; de @unique op
-  // invoiceNumber blijft het DB-vangnet.
+  // Atomair: teller per (stal, jaar) ophogen en het factuurnummer + datum + status + de
+  // betaal-momentopname in dezelfde transactie schrijven, zodat parallelle acties nooit
+  // hetzelfde nummer toekennen. De upsert-increment vormt de sluitende race-safe variant;
+  // de @unique op invoiceNumber blijft het DB-vangnet.
   await prisma.$transaction(async (tx) => {
     const sequence = await tx.invoiceNumberSequence.upsert({
       where: { stableId_year: { stableId: invoice.stableId, year: jaar } },
@@ -502,6 +535,15 @@ export async function maakFactuurDefinitief(invoiceId: string): Promise<void> {
         invoiceNumber,
         invoiceDate: invoice.invoiceDate ?? vandaag,
         status: 'VERZONDEN',
+        // Momentopname van de betaalwijze + (bij SEPA) mandaatgegevens.
+        paymentMethod,
+        sepaAccountHolder:
+          paymentMethod === 'SEPA_INCASSO' ? profiel?.sepaAccountHolder ?? null : null,
+        sepaIban: paymentMethod === 'SEPA_INCASSO' ? profiel?.sepaIban ?? null : null,
+        sepaMandateReference:
+          paymentMethod === 'SEPA_INCASSO' ? profiel?.sepaMandateReference ?? null : null,
+        sepaMandateDate:
+          paymentMethod === 'SEPA_INCASSO' ? profiel?.sepaMandateDate ?? null : null,
       },
     })
   })

@@ -18,6 +18,8 @@ type Stable = {
   invoiceAddress: string | null
   invoicePostalCode: string | null
   invoiceCity: string | null
+  iban: string | null
+  accountHolder: string | null
 }
 
 type State = { error?: string }
@@ -144,6 +146,22 @@ export default function StalBewerkenForm({ stable }: { stable: Stable }) {
       <div className="form-group">
         <label className="form-label">Stad / dorp</label>
         <input name="invoiceCity" type="text" className="input" defaultValue={stable.invoiceCity ?? ''} placeholder="Rotterdam" />
+      </div>
+
+      {/* Betaalgegevens ([Fact 06] #151): voeden de overboekingsinstructie op de factuur. */}
+      <div className="form-section-title" style={{ margin: 'var(--velaro-space-6) 0 var(--velaro-space-4)' }}>
+        <strong>Betaalgegevens <span style={{ fontWeight: 400, fontSize: 'var(--velaro-text-sm)', color: 'var(--velaro-color-muted)' }}>(voor de overboekingsinstructie op facturen)</span></strong>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group" style={{ flex: 2 }}>
+          <label className="form-label">IBAN</label>
+          <input name="iban" type="text" className="input" defaultValue={stable.iban ?? ''} placeholder="NL91 ABNA 0417 1643 00" />
+        </div>
+        <div className="form-group" style={{ flex: 2 }}>
+          <label className="form-label">Tenaamstelling</label>
+          <input name="accountHolder" type="text" className="input" defaultValue={stable.accountHolder ?? ''} placeholder="Pensionstal De Vries B.V." />
+        </div>
       </div>
 
       <div style={{ marginTop: 'var(--velaro-space-6)' }}>

@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import type { VatRate } from '@prisma/client'
+import type { VatRate, PaymentMethod } from '@prisma/client'
 import {
   berekenFactuurTotalen,
   formatEuro,
@@ -43,6 +43,22 @@ export type FactuurPdfOntvanger = {
   vatNumber: string | null
 }
 
+// Het betaalblok onderaan de factuur ([Fact 06] #151). De waarden zijn de momentopname
+// van de factuur (niet het live profiel). Bij OVERBOEKING wordt de overboekingsinstructie
+// getoond (stal-IBAN/tenaamstelling + factuurnummer als kenmerk); bij SEPA_INCASSO de
+// incasso-aankondiging met de mandaatgegevens. Mandaatdatum al NL-geformatteerd.
+export type FactuurPdfBetaling = {
+  wijze: PaymentMethod
+  // Afzender (stal) — voor de overboekingsinstructie.
+  stalIban: string | null
+  stalTenaamstelling: string | null
+  // Ontvanger-mandaat (SEPA) — momentopname.
+  iban: string | null
+  tenaamstelling: string | null
+  mandaatkenmerk: string | null
+  mandaatdatum: string | null
+}
+
 // Het volledige, gerenderde model van de factuur-PDF.
 export type FactuurPdfData = {
   factuurnummer: string
@@ -56,6 +72,9 @@ export type FactuurPdfData = {
   totaleBtw: string
   totaal: string
   notes: string | null
+  // Betaalinstructie ([Fact 06] #151); null wanneer er (nog) geen betaalwijze
+  // vastligt op de factuur (bv. oudere facturen van vóór deze story).
+  betaling: FactuurPdfBetaling | null
   // Eigen stallogo als data-URL (#98), of null voor de Velaro-fallback.
   stalLogoDataUrl: string | null
 }
@@ -68,6 +87,16 @@ export type PdfFactuurregelInput = {
   vatRate: VatRate
 }
 
+// De op de factuur vastgelegde betaal-momentopname ([Fact 06] #151). Null/leeg
+// betaalwijze → geen betaalblok (bv. oudere facturen).
+export type FactuurPdfBetalingInput = {
+  paymentMethod: PaymentMethod | null
+  sepaAccountHolder: string | null
+  sepaIban: string | null
+  sepaMandateReference: string | null
+  sepaMandateDate: Date | null
+}
+
 // Minimale factuur-vorm die de databouw nodig heeft.
 export type FactuurPdfInput = {
   invoiceNumber: string
@@ -75,6 +104,14 @@ export type FactuurPdfInput = {
   dueDate: Date | null
   notes: string | null
   regels: PdfFactuurregelInput[]
+  // Betaal-momentopname op de factuur ([Fact 06] #151).
+  betaling?: FactuurPdfBetalingInput | null
+}
+
+// De afzender-betaalgegevens van de stal ([Fact 06] #151), voor de overboekingsinstructie.
+export type FactuurPdfStalBetaalgegevens = {
+  iban: string | null
+  tenaamstelling: string | null
 }
 
 // De partijen-/logo-context (uit de DB samengesteld door de aanroeper).
@@ -82,6 +119,8 @@ export type FactuurPdfContext = {
   afzender: FactuurPdfAfzender
   ontvanger: FactuurPdfOntvanger
   stalLogoDataUrl?: string | null
+  // Stal-IBAN + tenaamstelling (afzender) voor de overboekingsinstructie.
+  stalBetaalgegevens?: FactuurPdfStalBetaalgegevens | null
 }
 
 function formatDatumNL(date: Date): string {
@@ -90,6 +129,14 @@ function formatDatumNL(date: Date): string {
     month: 'long',
     year: 'numeric',
   }).format(date)
+}
+
+// Formatteert een IBAN leesbaar in groepen van vier (bv. NL91 ABNA 0417 1643 00).
+// Toont null wanneer er geen IBAN is.
+function formatIbanLeesbaar(iban: string | null): string | null {
+  if (!iban) return null
+  const genormaliseerd = iban.replace(/\s+/g, '').toUpperCase()
+  return genormaliseerd.replace(/(.{4})/g, '$1 ').trim()
 }
 
 // Formatteert een aantal (Decimal/number/string) zonder overbodige decimalen: een
@@ -132,6 +179,26 @@ export function bouwFactuurPdfData(
     btwBedrag: formatEuro(groep.btwBedrag),
   }))
 
+  // Betaalblok ([Fact 06] #151): alleen wanneer er een betaalwijze op de factuur staat.
+  // De stal-IBAN/tenaamstelling komen uit de context (afzender); de mandaatgegevens uit
+  // de momentopname op de factuur. IBANs worden leesbaar gegroepeerd, datum NL-geformatteerd.
+  const betalingInput = factuur.betaling ?? null
+  const stalBetaal = context.stalBetaalgegevens ?? null
+  const betaling: FactuurPdfBetaling | null =
+    betalingInput && betalingInput.paymentMethod
+      ? {
+          wijze: betalingInput.paymentMethod,
+          stalIban: formatIbanLeesbaar(stalBetaal?.iban ?? null),
+          stalTenaamstelling: stalBetaal?.tenaamstelling ?? null,
+          iban: formatIbanLeesbaar(betalingInput.sepaIban),
+          tenaamstelling: betalingInput.sepaAccountHolder,
+          mandaatkenmerk: betalingInput.sepaMandateReference,
+          mandaatdatum: betalingInput.sepaMandateDate
+            ? formatDatumNL(betalingInput.sepaMandateDate)
+            : null,
+        }
+      : null
+
   return {
     factuurnummer: factuur.invoiceNumber,
     factuurdatum: factuur.invoiceDate ? formatDatumNL(factuur.invoiceDate) : null,
@@ -144,6 +211,7 @@ export function bouwFactuurPdfData(
     totaleBtw: formatEuro(totalen.vatAmount),
     totaal: formatEuro(totalen.total),
     notes: factuur.notes,
+    betaling,
     stalLogoDataUrl: context.stalLogoDataUrl ?? null,
   }
 }

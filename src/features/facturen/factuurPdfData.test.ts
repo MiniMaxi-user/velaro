@@ -79,6 +79,77 @@ test('neemt factuurnummer, datums en partijen over en formatteert de datums NL',
   assert.equal(data.btwGroepen.length, 1)
 })
 
+test('bouwt geen betaalblok wanneer er geen betaalwijze op de factuur staat', () => {
+  const data = bouwFactuurPdfData(
+    {
+      invoiceNumber: '2026-0003',
+      invoiceDate: null,
+      dueDate: null,
+      notes: null,
+      regels: [{ description: 'Stalling', quantity: 1, unitPrice: 100, vatRate: 'HOOG' }],
+    },
+    context,
+  )
+  assert.equal(data.betaling, null)
+})
+
+test('bouwt het overboekingsblok met stal-IBAN (leesbaar) en tenaamstelling', () => {
+  const data = bouwFactuurPdfData(
+    {
+      invoiceNumber: '2026-0004',
+      invoiceDate: null,
+      dueDate: null,
+      notes: null,
+      regels: [{ description: 'Stalling', quantity: 1, unitPrice: 100, vatRate: 'HOOG' }],
+      betaling: {
+        paymentMethod: 'OVERBOEKING',
+        sepaAccountHolder: null,
+        sepaIban: null,
+        sepaMandateReference: null,
+        sepaMandateDate: null,
+      },
+    },
+    {
+      ...context,
+      stalBetaalgegevens: { iban: 'NL91ABNA0417164300', tenaamstelling: 'Stal Jasper' },
+    },
+  )
+  assert.ok(data.betaling)
+  assert.equal(data.betaling!.wijze, 'OVERBOEKING')
+  // IBAN leesbaar gegroepeerd per vier.
+  assert.equal(data.betaling!.stalIban, 'NL91 ABNA 0417 1643 00')
+  assert.equal(data.betaling!.stalTenaamstelling, 'Stal Jasper')
+  // Geen mandaatgegevens bij overboeking.
+  assert.equal(data.betaling!.iban, null)
+  assert.equal(data.betaling!.mandaatkenmerk, null)
+})
+
+test('bouwt het SEPA-incassoblok met mandaatgegevens en NL-mandaatdatum', () => {
+  const data = bouwFactuurPdfData(
+    {
+      invoiceNumber: '2026-0005',
+      invoiceDate: null,
+      dueDate: null,
+      notes: null,
+      regels: [{ description: 'Stalling', quantity: 1, unitPrice: 100, vatRate: 'HOOG' }],
+      betaling: {
+        paymentMethod: 'SEPA_INCASSO',
+        sepaAccountHolder: 'J. de Vries',
+        sepaIban: 'NL91ABNA0417164300',
+        sepaMandateReference: 'MND-2026-001',
+        sepaMandateDate: new Date('2026-01-15T00:00:00Z'),
+      },
+    },
+    context,
+  )
+  assert.ok(data.betaling)
+  assert.equal(data.betaling!.wijze, 'SEPA_INCASSO')
+  assert.equal(data.betaling!.iban, 'NL91 ABNA 0417 1643 00')
+  assert.equal(data.betaling!.tenaamstelling, 'J. de Vries')
+  assert.equal(data.betaling!.mandaatkenmerk, 'MND-2026-001')
+  assert.equal(data.betaling!.mandaatdatum, '15 januari 2026')
+})
+
 test('toont een geheel aantal zonder decimalen en een deelperiode met NL-komma', () => {
   const data = bouwFactuurPdfData(
     {

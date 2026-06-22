@@ -90,6 +90,8 @@ async function bouwContextVoorFactuur(invoiceId: string): Promise<FactuurPdfCont
           postalCode: true,
           city: true,
           logoPath: true,
+          iban: true,
+          accountHolder: true,
         },
       },
       recipient: {
@@ -149,6 +151,11 @@ async function bouwContextVoorFactuur(invoiceId: string): Promise<FactuurPdfCont
     stalLogoDataUrl: invoice.stable.logoPath
       ? await getStableLogoDataUrl(invoice.stable.id)
       : null,
+    // Stal-betaalgegevens (afzender) voor de overboekingsinstructie ([Fact 06] #151).
+    stalBetaalgegevens: {
+      iban: invoice.stable.iban,
+      tenaamstelling: invoice.stable.accountHolder,
+    },
   }
 }
 
@@ -179,6 +186,14 @@ export async function genereerEnSlaFactuurPdfOp(invoiceId: string): Promise<void
         unitPrice: l.unitPrice,
         vatRate: l.vatRate,
       })),
+      // Betaal-momentopname op de factuur ([Fact 06] #151).
+      betaling: {
+        paymentMethod: invoice.paymentMethod,
+        sepaAccountHolder: invoice.sepaAccountHolder,
+        sepaIban: invoice.sepaIban,
+        sepaMandateReference: invoice.sepaMandateReference,
+        sepaMandateDate: invoice.sepaMandateDate,
+      },
     },
     context,
   )

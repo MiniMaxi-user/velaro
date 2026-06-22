@@ -85,8 +85,29 @@ model OwnerBusinessProfile {
   invoiceCity            String?
   invoiceCountry         String?
 
+  // Betaalwijze + SEPA-incassomachtiging ([Fact 06] #151). Per eigenaar (ontvanger),
+  // omdat een eigenaar doorgaans op één manier betaalt voor al zijn paarden/contracten
+  // bij de stal. Bij OVERBOEKING blijven de mandaatvelden leeg; bij SEPA_INCASSO zijn
+  // tenaamstelling, IBAN (genormaliseerd: zonder spaties, hoofdletters), mandaatkenmerk
+  // en mandaatdatum vereist (afgedwongen in de server action). De factuur legt deze
+  // gegevens bij definitief maken als momentopname vast (zie Invoice).
+  paymentMethod        PaymentMethod @default(OVERBOEKING)
+  sepaAccountHolder    String? // tenaamstelling rekeninghouder
+  sepaIban             String? // IBAN, genormaliseerd opgeslagen
+  sepaMandateReference String? // uniek mandaatkenmerk
+  sepaMandateDate      DateTime? // datum ondertekening/akkoord van het mandaat
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Betaalwijze voor een factuur/eigenaar ([Fact 06] #151).
+//  - OVERBOEKING  → de ontvanger maakt zelf over (factuur toont overboekingsinstructie).
+//  - SEPA_INCASSO → doorlopende SEPA-incasso o.b.v. een geregistreerd mandaat
+//    (factuur toont de incasso-aankondiging met mandaatgegevens).
+enum PaymentMethod {
+  OVERBOEKING
+  SEPA_INCASSO
 }
 
 // ── Stal (pensionbedrijf) ────────────────────────────────────────────────────
@@ -127,6 +148,11 @@ model Stable {
   invoiceAddress    String?
   invoicePostalCode String?
   invoiceCity       String?
+
+  // Betaalgegevens van de stal (afzender) voor de overboekingsinstructie op de
+  // factuur-PDF ([Fact 06] #151). Bewust klein: alleen IBAN + tenaamstelling.
+  iban          String? // IBAN van de stal (afzender), genormaliseerd opgeslagen
+  accountHolder String? // tenaamstelling van de stalrekening
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -841,6 +867,17 @@ model Invoice {
 
   // Vrije opmerking op de factuur.
   notes String?
+
+  // Betaalwijze + SEPA-mandaat als momentopname ([Fact 06] #151). Allemaal nullable;
+  // gevuld bij maakFactuurDefinitief vanuit het OwnerBusinessProfile van de ontvanger,
+  // binnen dezelfde transactie als de nummertoekenning. Zo blijft een reeds uitgereikte
+  // factuur reproduceerbaar en verandert een latere mandaatwijziging hem niet (consistent
+  // met de gedenormaliseerde totalen). Bij OVERBOEKING blijven de SEPA-velden leeg.
+  paymentMethod        PaymentMethod?
+  sepaAccountHolder    String?
+  sepaIban             String?
+  sepaMandateReference String?
+  sepaMandateDate      DateTime?
 
   lines InvoiceLine[]
   // Gegenereerde factuur-PDF's (Fact 05). Laatste document = de actuele PDF.

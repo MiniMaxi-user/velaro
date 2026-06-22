@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { canCreateStable } from '@/lib/auth/authorization'
 import { activeStableCookieName, ALLE_STALLEN } from '@/lib/active-stable'
+import { normaliseerIban, isGeldigeIban } from '@/features/facturen/iban'
 
 export async function createStable(formData: FormData) {
   const supabase = await createClient()
@@ -101,6 +102,17 @@ export async function updateStable(stableId: string, formData: FormData) {
 
   const str = (key: string) => (formData.get(key) as string)?.trim() || null
 
+  // Stal-IBAN ([Fact 06] #151): optioneel, maar wanneer ingevuld gevalideerd (ISO 13616)
+  // en genormaliseerd (zonder spaties, hoofdletters) opgeslagen.
+  const ibanInvoer = str('iban')
+  let iban: string | null = null
+  if (ibanInvoer) {
+    if (!isGeldigeIban(ibanInvoer)) {
+      throw new Error('De IBAN is ongeldig. Controleer het rekeningnummer en probeer het opnieuw.')
+    }
+    iban = normaliseerIban(ibanInvoer)
+  }
+
   await prisma.stable.update({
     where: { id: stableId },
     data: {
@@ -116,6 +128,8 @@ export async function updateStable(stableId: string, formData: FormData) {
       invoiceAddress:    str('invoiceAddress'),
       invoicePostalCode: str('invoicePostalCode'),
       invoiceCity:       str('invoiceCity'),
+      iban,
+      accountHolder:     str('accountHolder'),
     },
   })
 
