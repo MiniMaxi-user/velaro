@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import type { VatRate } from '@prisma/client'
+import type { VatRate, InvoiceStatus } from '@prisma/client'
 
 // ── Factuur-berekeningen ([Fact 03] #148) ────────────────────────────────────
 // Centrale, test-vriendelijke rekenhelper voor het concept-factureren. Alle bedragen
@@ -148,4 +148,58 @@ export function berekenFactuurTotalen(regels: RuweFactuurregel[]): FactuurTotale
   const total = afronden(subtotal.add(vatAmount))
 
   return { regels: berekendeRegels, btwGroepen, subtotal, vatAmount, total }
+}
+
+// ── Samenvattende cijfers ([Fact 07] #152) ───────────────────────────────────
+// Eenvoudige optelling per status voor het facturen-overzicht (geen grafieken/rapportage):
+//   - openstaand = som van de totalen van VERZONDEN + VERVALLEN (nog te innen),
+//   - betaald    = som van de totalen van BETAALD,
+//   - omzet      = som van alle niet-CONCEPT en niet-GEANNULEERD totalen.
+// Bewust losgekoppeld van Prisma-IO zodat de overzichtspagina (en tests) ze uit de al
+// opgehaalde lijst kunnen berekenen, zonder extra query.
+
+export interface FactuurSamenvatting {
+  openstaandBedrag: Prisma.Decimal
+  openstaandAantal: number
+  betaaldBedrag: Prisma.Decimal
+  betaaldAantal: number
+  omzetBedrag: Prisma.Decimal
+}
+
+interface FactuurVoorSamenvatting {
+  status: InvoiceStatus
+  total: Prisma.Decimal | number | string
+}
+
+export function berekenFactuurSamenvatting(
+  facturen: FactuurVoorSamenvatting[],
+): FactuurSamenvatting {
+  let openstaandBedrag = new Prisma.Decimal(0)
+  let openstaandAantal = 0
+  let betaaldBedrag = new Prisma.Decimal(0)
+  let betaaldAantal = 0
+  let omzetBedrag = new Prisma.Decimal(0)
+
+  for (const factuur of facturen) {
+    const total = naarDecimal(factuur.total)
+    if (factuur.status === 'VERZONDEN' || factuur.status === 'VERVALLEN') {
+      openstaandBedrag = openstaandBedrag.add(total)
+      openstaandAantal += 1
+    }
+    if (factuur.status === 'BETAALD') {
+      betaaldBedrag = betaaldBedrag.add(total)
+      betaaldAantal += 1
+    }
+    if (factuur.status !== 'CONCEPT' && factuur.status !== 'GEANNULEERD') {
+      omzetBedrag = omzetBedrag.add(total)
+    }
+  }
+
+  return {
+    openstaandBedrag: afronden(openstaandBedrag),
+    openstaandAantal,
+    betaaldBedrag: afronden(betaaldBedrag),
+    betaaldAantal,
+    omzetBedrag: afronden(omzetBedrag),
+  }
 }

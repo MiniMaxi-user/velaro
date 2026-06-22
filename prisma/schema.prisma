@@ -868,6 +868,12 @@ model Invoice {
   // Vrije opmerking op de factuur.
   notes String?
 
+  // Administratieve momentopname van een uitgaande betalingsherinnering ([Fact 07] #152).
+  // Nullable: gevuld zodra de stal een (vervallen) factuur als "herinnerd" markeert, zodat
+  // zichtbaar is of/wanneer er een herinnering is uitgegaan. Geen e-mail/notificatie — de
+  // MVP kent geen mail-infrastructuur (CLAUDE.md); dit is puur een administratieve markering.
+  reminderSentAt DateTime?
+
   // Betaalwijze + SEPA-mandaat als momentopname ([Fact 06] #151). Allemaal nullable;
   // gevuld bij maakFactuurDefinitief vanuit het OwnerBusinessProfile van de ontvanger,
   // binnen dezelfde transactie als de nummertoekenning. Zo blijft een reeds uitgereikte

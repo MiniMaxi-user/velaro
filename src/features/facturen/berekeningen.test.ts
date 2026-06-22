@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import {
   berekenLineTotal,
   berekenFactuurTotalen,
+  berekenFactuurSamenvatting,
   VAT_RATE_PERCENTAGE,
   VAT_RATE_LABEL,
   VAT_RATES,
@@ -104,4 +105,33 @@ test('accepteert Prisma.Decimal-invoer', () => {
   assert.equal(t.subtotal.toString(), '15')
   assert.equal(t.vatAmount.toString(), '1.35') // 9% van 15
   assert.equal(t.total.toString(), '16.35')
+})
+
+// ── Samenvattende cijfers ([Fact 07] #152) ───────────────────────────────────
+
+test('berekenFactuurSamenvatting telt openstaand/betaald/omzet per status', () => {
+  const s = berekenFactuurSamenvatting([
+    { status: 'VERZONDEN', total: '100' },
+    { status: 'VERVALLEN', total: '50' },
+    { status: 'BETAALD', total: '200' },
+    { status: 'CONCEPT', total: '999' }, // telt nergens mee
+    { status: 'GEANNULEERD', total: '999' }, // telt nergens mee
+  ])
+  // Openstaand = VERZONDEN + VERVALLEN = 150 (2 stuks)
+  assert.equal(s.openstaandBedrag.toString(), '150')
+  assert.equal(s.openstaandAantal, 2)
+  // Betaald = 200 (1 stuk)
+  assert.equal(s.betaaldBedrag.toString(), '200')
+  assert.equal(s.betaaldAantal, 1)
+  // Omzet = niet-CONCEPT, niet-GEANNULEERD = 100 + 50 + 200 = 350
+  assert.equal(s.omzetBedrag.toString(), '350')
+})
+
+test('berekenFactuurSamenvatting op lege lijst geeft nullen', () => {
+  const s = berekenFactuurSamenvatting([])
+  assert.equal(s.openstaandBedrag.toString(), '0')
+  assert.equal(s.openstaandAantal, 0)
+  assert.equal(s.betaaldBedrag.toString(), '0')
+  assert.equal(s.betaaldAantal, 0)
+  assert.equal(s.omzetBedrag.toString(), '0')
 })

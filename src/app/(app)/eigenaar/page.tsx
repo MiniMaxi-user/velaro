@@ -33,6 +33,11 @@ import {
   volgendeEinddatum,
 } from '@/features/contracten/verlenging'
 import { berekenLeeftijd, formatDatum } from '@/features/paarden/paardHelpers'
+import { getInvoicesForRecipient } from '@/features/facturen/queries'
+import { verwerkVervallenFacturen, getFactuurPdfUrl } from '@/features/facturen/actions'
+import EigenaarFacturenPaneel, {
+  type EigenaarFactuurRegel,
+} from '@/features/facturen/EigenaarFacturenPaneel'
 
 export default async function EigenaarPage() {
   const user = await getAuthUser()
@@ -82,6 +87,25 @@ export default async function EigenaarPage() {
     ? await getContractsForEigenaar(user.id)
     : eigenaarContractenVoorVerlenging
 
+  // Mijn facturen ([Fact 07] #152): de eigen, niet-CONCEPT facturen waarvan deze gebruiker
+  // de ontvanger is (getInvoicesForRecipient sluit concepten uit). Lazy auto-VERVALLEN bij
+  // bezoek, zodat de eigenaar een verstreken factuur direct als "vervallen" ziet; bij
+  // wijziging opnieuw ophalen. Read-only: de eigenaar beheert geen status.
+  let mijnFacturen = await getInvoicesForRecipient(user.id)
+  const facturenVervallen = await verwerkVervallenFacturen(mijnFacturen)
+  if (facturenVervallen > 0) {
+    mijnFacturen = await getInvoicesForRecipient(user.id)
+  }
+  const factuurRegels: EigenaarFactuurRegel[] = mijnFacturen.map((f) => ({
+    id: f.id,
+    invoiceNumber: f.invoiceNumber,
+    status: f.status,
+    stableName: f.stable.name,
+    invoiceDate: f.invoiceDate ? f.invoiceDate.toISOString() : null,
+    dueDate: f.dueDate ? f.dueDate.toISOString() : null,
+    total: f.total.toString(),
+  }))
+
   // Bijlagen (STAL-16) van een eventueel aangeboden contract per paard, met signed
   // URL's voor inzage. Alleen voor het aangeboden contract — concepten ziet de
   // eigenaar niet. Geen aanbod → lege lijst.
@@ -105,6 +129,12 @@ export default async function EigenaarPage() {
       {leaseMijlpalen.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <LeaseMijlpalenPanel regels={leaseMijlpalen} />
+        </div>
+      )}
+
+      {factuurRegels.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <EigenaarFacturenPaneel facturen={factuurRegels} pdfUrlAction={getFactuurPdfUrl} />
         </div>
       )}
 

@@ -68,6 +68,12 @@ function NavIcon({ name }: { name: string }) {
       <path d="M6 8.5h5M6 11h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   )
+  if (name === 'invoice') return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M3.5 1.5h9v13l-2-1.2-2 1.2-2-1.2-2 1.2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+      <path d="M6 5h4M6 7.5h4M6 10h2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    </svg>
+  )
   if (name === 'admin') return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
@@ -124,6 +130,7 @@ export default function SidebarClient({
       { href: '/paarden',    label: 'Paarden',      icon: 'horse',     exact: false },
       { href: '/lease',      label: 'Lease',         icon: 'lease',     exact: false },
       { href: '/stal/contracten', label: 'Contracten', icon: 'contract', exact: false },
+      { href: '/stal/facturen', label: 'Facturen',    icon: 'invoice',   exact: false },
       { href: '/stal/leden', label: 'Team',          icon: 'team',      exact: false },
       // Externe accounts (paardeneigenaren & bereiders): alleen voor de OWNER (#114).
       ...(isOwnerOfAny

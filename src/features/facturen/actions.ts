@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth/session'
 import { getActiveStableId, ALLE_STALLEN } from '@/lib/active-stable'
 import { isPlatformAdmin } from '@/lib/auth/authorization'
-import type { VatRate, Prisma } from '@prisma/client'
+import type { VatRate, Prisma, InvoiceStatus } from '@prisma/client'
 import {
   assertCanManageInvoicesForStable,
   assertCanManageInvoice,
@@ -19,6 +19,7 @@ import {
 import { berekenFactuurTotalen, type RuweFactuurregel } from './berekeningen'
 import { voorvulRegelsUitContractConfig } from './contractVoorvullen'
 import { genereerEnSlaFactuurPdfOp } from './pdf'
+import { assertGeldigeStatusovergang, moetVervallen } from './factuurStatus'
 
 // ── Factuur-beheeracties ([Fact 03] #148) ────────────────────────────────────
 // Beheer-UI (concept opstellen + handmatige regels) bovenop het Fact 02-fundament.
@@ -564,4 +565,127 @@ export async function getFactuurPdfUrl(invoiceId: string): Promise<string | null
   const user = await getAuthUser()
   if (!user) redirect('/login')
   return getSignedUrlVoorLaatsteFactuurDocument(user.id, invoiceId)
+}
+
+// ── Statusbeheer na uitreiken ([Fact 07] #152) ───────────────────────────────
+// Beheert de factuur-levenscyclus ná het definitief maken: markeren als betaald,
+// annuleren, automatisch vervallen en een herinnering markeren. Autorisatie blijft
+// kernlogica die wij server-side afdwingen (CLAUDE.md): elke mutatie loopt via de
+// Fact 02-guard assertCanManageInvoice. De toegestane overgangen staan centraal in
+// factuurStatus.ts en worden via assertGeldigeStatusovergang afgedwongen, zodat een
+// ongeldige overgang server-side onmogelijk is (niet alleen in de UI verborgen).
+// Patroon gespiegeld op de contract-acties: validatie die bij overtreding een Error
+// gooit, daarna revalidatePath op overzicht én bewerk-/detailpagina.
+
+// Revalideert de pagina's die de factuurstatus tonen na een statusmutatie.
+function revalideerFactuurPaginas(invoiceId: string): void {
+  revalidatePath('/stal/facturen')
+  revalidatePath(`/stal/facturen/${invoiceId}/bewerken`)
+  revalidatePath('/eigenaar')
+}
+
+/**
+ * Markeert een factuur als betaald (VERZONDEN/VERVALLEN → BETAALD). Een ongeldige
+ * overgang (bv. een concept of een al betaalde/geannuleerde factuur) wordt server-side
+ * geweigerd met een nette Nederlandse melding.
+ */
+export async function markeerFactuurBetaald(invoiceId: string): Promise<void> {
+  const user = await getAuthUser()
+  if (!user) redirect('/login')
+  const invoice = await assertCanManageInvoice(user.id, invoiceId)
+
+  assertGeldigeStatusovergang(invoice.status, 'BETAALD')
+
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status: 'BETAALD' },
+  })
+
+  revalideerFactuurPaginas(invoiceId)
+}
+
+/**
+ * Annuleert een factuur (CONCEPT/VERZONDEN/VERVALLEN → GEANNULEERD). Een betaalde factuur
+ * kan niet worden geannuleerd (creditfacturen vallen buiten scope); dat wordt server-side
+ * geweigerd met een nette Nederlandse melding.
+ */
+export async function annuleerFactuur(invoiceId: string): Promise<void> {
+  const user = await getAuthUser()
+  if (!user) redirect('/login')
+  const invoice = await assertCanManageInvoice(user.id, invoiceId)
+
+  assertGeldigeStatusovergang(invoice.status, 'GEANNULEERD')
+
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status: 'GEANNULEERD' },
+  })
+
+  revalideerFactuurPaginas(invoiceId)
+}
+
+/**
+ * Markeert dat er een betalingsherinnering is uitgegaan (administratieve momentopname,
+ * reminderSentAt). Alleen toegestaan op een VERVALLEN-factuur — de eenvoudigste sluitende
+ * variant. Geen e-mail/notificatie: de MVP kent geen mail-infrastructuur (CLAUDE.md).
+ */
+export async function markeerFactuurHerinnerd(invoiceId: string): Promise<void> {
+  const user = await getAuthUser()
+  if (!user) redirect('/login')
+  const invoice = await assertCanManageInvoice(user.id, invoiceId)
+
+  if (invoice.status !== 'VERVALLEN') {
+    throw new Error(
+      'Een herinnering kan alleen worden genoteerd voor een vervallen factuur.',
+    )
+  }
+
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { reminderSentAt: new Date() },
+  })
+
+  revalideerFactuurPaginas(invoiceId)
+}
+
+/**
+ * Zet één VERZONDEN-factuur met verstreken vervaldatum op VERVALLEN (lazy, automatisch).
+ * Idempotent: een factuur die niet (meer) in aanmerking komt blijft ongemoeid. Geeft terug
+ * of er daadwerkelijk een overgang heeft plaatsgevonden. Géén eigen autorisatie: deze
+ * helper wordt aangeroepen ná de scope-bepaling op het overzicht/eigenaar-dashboard en
+ * werkt enkel op de daar al toegestane facturen — exact het patroon van
+ * verwerkTijdgebondenOvergang uit de contract-module.
+ */
+async function verwerkVervallenFactuur(invoice: {
+  id: string
+  status: InvoiceStatus
+  dueDate: Date | null
+}): Promise<boolean> {
+  if (!moetVervallen(invoice.status, invoice.dueDate)) return false
+  assertGeldigeStatusovergang(invoice.status, 'VERVALLEN')
+  await prisma.invoice.update({
+    where: { id: invoice.id },
+    data: { status: 'VERVALLEN' },
+  })
+  return true
+}
+
+/**
+ * Verwerkt de auto-VERVALLEN-overgang voor een set facturen (lazy, bij paginabezoek).
+ * Idempotent en bestand tegen fouten op individuele facturen, zodat een enkele
+ * probleemfactuur het laden van de pagina niet blokkeert. Geeft het aantal daadwerkelijk
+ * gewijzigde facturen terug. Spiegelt verwerkTijdgebondenOvergangen uit de contract-module.
+ */
+export async function verwerkVervallenFacturen(
+  facturen: { id: string; status: InvoiceStatus; dueDate: Date | null }[],
+): Promise<number> {
+  let aantal = 0
+  for (const factuur of facturen) {
+    try {
+      if (await verwerkVervallenFactuur(factuur)) aantal += 1
+    } catch {
+      // Bewust stil: een falende overgang mag het laden van de pagina niet breken.
+    }
+  }
+  return aantal
 }

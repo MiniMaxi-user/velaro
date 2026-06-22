@@ -14,6 +14,9 @@ import {
   voorvulRegelsUitContract,
   maakFactuurDefinitief,
   getFactuurPdfUrl,
+  markeerFactuurBetaald,
+  annuleerFactuur,
+  markeerFactuurHerinnerd,
 } from '@/features/facturen/actions'
 import {
   berekenFactuurTotalen,
@@ -25,6 +28,8 @@ import FactuurRegelsBeheer, {
   type RegelWeergave,
 } from '@/features/facturen/FactuurRegelsBeheer'
 import FactuurDefinitiefActie from '@/features/facturen/FactuurDefinitiefActie'
+import FactuurStatusActies from '@/features/facturen/FactuurStatusActies'
+import { INVOICE_STATUS_LABEL, INVOICE_STATUS_BADGE } from '@/features/facturen/factuurStatus'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -84,8 +89,8 @@ export default async function FactuurBewerkenPage({ params }: Props) {
             <em>Concept-factuur</em>
           </h1>
         </div>
-        <Link href="/stal/contracten" className="btn-ghost">
-          ← Stal
+        <Link href="/stal/facturen" className="btn-ghost">
+          ← Facturen
         </Link>
       </div>
 
@@ -95,14 +100,16 @@ export default async function FactuurBewerkenPage({ params }: Props) {
             <div className="empty-state__title">Deze factuur is geen concept meer</div>
             <p>
               Een factuur kan alleen worden bewerkt zolang deze de status concept heeft. De
-              huidige status is {invoice.status.toLowerCase()}.
+              huidige status is {INVOICE_STATUS_LABEL[invoice.status].toLowerCase()}.
             </p>
           </div>
 
           <div className="panel" style={{ marginTop: 'var(--velaro-space-8)' }}>
             <div className="panel-header">
               <span className="panel-title">Definitieve factuur</span>
-              <span className="badge badge-neutral">{invoice.status.toLowerCase()}</span>
+              <span className={`badge ${INVOICE_STATUS_BADGE[invoice.status]}`}>
+                {INVOICE_STATUS_LABEL[invoice.status]}
+              </span>
             </div>
             <div className="panel-body">
               <FactuurDefinitiefActie
@@ -111,6 +118,23 @@ export default async function FactuurBewerkenPage({ params }: Props) {
                 invoiceNumber={invoice.invoiceNumber}
                 definitiefAction={maakFactuurDefinitief.bind(null, invoice.id)}
                 pdfUrlAction={getFactuurPdfUrl.bind(null, invoice.id)}
+              />
+            </div>
+          </div>
+
+          <div className="panel" style={{ marginTop: 'var(--velaro-space-8)' }}>
+            <div className="panel-header">
+              <span className="panel-title">Statusbeheer</span>
+            </div>
+            <div className="panel-body">
+              <FactuurStatusActies
+                status={invoice.status}
+                reminderSentAt={
+                  invoice.reminderSentAt ? invoice.reminderSentAt.toISOString() : null
+                }
+                betaaldAction={markeerFactuurBetaald.bind(null, invoice.id)}
+                annuleerAction={annuleerFactuur.bind(null, invoice.id)}
+                herinnerdAction={markeerFactuurHerinnerd.bind(null, invoice.id)}
               />
             </div>
           </div>
