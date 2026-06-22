@@ -119,6 +119,115 @@ export async function getInvoiceForRecipient(userId: string, invoiceId: string) 
   })
 }
 
+// ── Keuzelijsten voor het opstellen van een concept-factuur ([Fact 03] #148) ─
+// Gescoped op de actieve stal en achter de beheer-guard. Levert de mogelijke
+// ontvangers (eigenaren + leasers van paarden van de stal) en de bron-contracten,
+// zodat de aanmaak-flow dezelfde scoping volgt als de contract-module. De daadwerkelijke
+// validatie van de gekozen ontvanger/contract gebeurt nogmaals server-side bij opslaan.
+
+export interface FactuurOntvangerKeuze {
+  id: string
+  name: string | null
+  email: string
+}
+
+// Haalt de mogelijke factuur-ontvangers van één stal op: alle gebruikers die eigenaar
+// (HorsePerson.isOwner) of leaser (Lease) zijn van een paard dat in deze stal staat.
+// Dwingt eerst de beheer-rol af. Gesorteerd op naam/e-mail, ontdubbeld.
+export async function getFactuurOntvangersVoorStable(
+  userId: string,
+  stableId: string,
+): Promise<FactuurOntvangerKeuze[]> {
+  await assertCanManageInvoicesForStable(userId, stableId)
+
+  const [eigenaren, leasers] = await Promise.all([
+    prisma.horsePerson.findMany({
+      where: { isOwner: true, horse: { stableId } },
+      select: { user: { select: { id: true, name: true, email: true } } },
+    }),
+    prisma.lease.findMany({
+      where: { horse: { stableId } },
+      select: { leaser: { select: { id: true, name: true, email: true } } },
+    }),
+  ])
+
+  const perId = new Map<string, FactuurOntvangerKeuze>()
+  for (const rij of eigenaren) {
+    perId.set(rij.user.id, rij.user)
+  }
+  for (const rij of leasers) {
+    perId.set(rij.leaser.id, rij.leaser)
+  }
+
+  return Array.from(perId.values()).sort((a, b) =>
+    (a.name ?? a.email).localeCompare(b.name ?? b.email, 'nl'),
+  )
+}
+
+// Controleert of een gekozen gebruiker een geldige ontvanger is voor de opgegeven stal
+// (eigenaar of leaser van een paard van die stal). Server-side validatie bij opslaan.
+export async function isGeldigeFactuurOntvanger(
+  stableId: string,
+  recipientUserId: string,
+): Promise<boolean> {
+  const [isEigenaar, isLeaser] = await Promise.all([
+    prisma.horsePerson.findFirst({
+      where: { userId: recipientUserId, isOwner: true, horse: { stableId } },
+      select: { id: true },
+    }),
+    prisma.lease.findFirst({
+      where: { leaserUserId: recipientUserId, horse: { stableId } },
+      select: { id: true },
+    }),
+  ])
+  return Boolean(isEigenaar) || Boolean(isLeaser)
+}
+
+export interface FactuurContractKeuze {
+  id: string
+  horseName: string
+  counterpartyName: string | null
+}
+
+// Haalt de contracten van één stal op als optionele bron-koppeling. Achter de
+// beheer-guard, gescoped op de actieve stal. Het voorvullen vanuit het contract is
+// Fact 04; hier alleen de koppeling.
+export async function getFactuurContractenVoorStable(
+  userId: string,
+  stableId: string,
+): Promise<FactuurContractKeuze[]> {
+  await assertCanManageInvoicesForStable(userId, stableId)
+
+  const contracten = await prisma.contract.findMany({
+    where: { stableId },
+    select: {
+      id: true,
+      horse: { select: { name: true } },
+      counterparty: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  return contracten.map((c) => ({
+    id: c.id,
+    horseName: c.horse?.name ?? '—',
+    counterpartyName: c.counterparty?.name ?? null,
+  }))
+}
+
+// Controleert of een gekozen contract bij de opgegeven stal hoort. Server-side
+// validatie bij opslaan; voorkomt het koppelen van een contract van een andere stal.
+export async function isContractVanStable(
+  stableId: string,
+  contractId: string,
+): Promise<boolean> {
+  const contract = await prisma.contract.findFirst({
+    where: { id: contractId, stableId },
+    select: { id: true },
+  })
+  return Boolean(contract)
+}
+
 // ── Factuur-PDF-inzage via signed URL ─────────────────────────────────────────
 
 // Geeft een tijdelijke (signed) URL terug voor de PDF van een factuur, met dezelfde
