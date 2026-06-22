@@ -1507,9 +1507,6 @@ a { color: inherit; text-decoration: none; }
   border-bottom: 1px solid var(--velaro-color-border);
 }
 
-/* Grid-cellen rekken mee tot gelijke hoogte (align-items: stretch is de
-   grid-default). Zo kan een naast elkaar staand inputveld zijn control onderaan
-   uitlijnen, ook als het buurlabel langer is of afbreekt. (#117) */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 .form-grid--full { grid-column: 1 / -1; }
@@ -1517,17 +1514,35 @@ a { color: inherit; text-decoration: none; }
 .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .form-group:last-child { margin-bottom: 0; }
 
-/* Binnen een .form-grid duwt de control (input/select/textarea) naar de onderkant
-   van de cel, zodat naast elkaar staande velden met ongelijke labellengte toch op
-   gelijke hoogte uitlijnen — generiek, zonder per-scherm work-around. */
-.form-grid > .form-group { margin-bottom: 0; }
-.form-grid > .form-group > .input,
-.form-grid > .form-group > select.input,
-.form-grid > .form-group > textarea.input { margin-top: auto; }
+/* Verticale uitlijning van naast elkaar staande velden in een .form-grid (#141).
+   De eerdere aanpak (control met margin-top:auto naar onderen duwen) faalde zodra
+   er na de control nog een form-hint/form-error volgde, bij ongelijke control-types,
+   of bij velden zonder label.
+
+   Oplossing: het label binnen een grid-cel reserveert een vaste hoogte van twee
+   tekstregels. Een kort (één-regel)label en een lang (afbrekend, twee-regel)label
+   nemen daardoor dezelfde verticale ruimte in, zodat de controls eronder altijd op
+   exact dezelfde hoogte starten. Dit is onafhankelijk van wat ná de control komt
+   (helptekst/foutmelding) en van het control-type (input/select/textarea).
+   Generiek en app-breed: werkt automatisch voor elk formulier dat het
+   .form-grid + .form-label-patroon gebruikt, zonder per-scherm work-around. */
+.form-grid,
+.form-grid-3 { align-items: start; }
+
+.form-grid > .form-group,
+.form-grid-3 > .form-group { margin-bottom: 0; }
+
+.form-grid > .form-group > .form-label,
+.form-grid-3 > .form-group > .form-label {
+  /* twee regels labelruimte: line-height 1.3 × 2 ≈ 2.6em. Korte en afbrekende
+     labels nemen zo dezelfde hoogte in, waardoor de controls gelijk uitlijnen. */
+  min-height: 2.6em;
+}
 
 .form-label {
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: 0.3px;
   color: var(--velaro-color-navy);
 }
