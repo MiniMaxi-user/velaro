@@ -52,6 +52,10 @@ model User {
   // (alleen relevant voor staleigenaar-accounts). Optioneel: niet elk account
   // heeft een profielrij.
   businessProfile OwnerBusinessProfile?
+
+  // Facturen waarvan deze gebruiker de ontvanger is (paardeigenaar/leaser), Fact 01.
+  // onDelete: SetNull op Invoice — facturen overleven het verwijderen van het account.
+  invoices Invoice[]
 }
 
 // ── Zakelijke / facturatiegegevens (fundament voor facturatie) ────────────────
@@ -133,6 +137,8 @@ model Stable {
   recurringTasks RecurringTask[]
   messages       Message[]
   contracts      Contract[]
+  // Facturen die deze stal uitgeeft (Fact 01).
+  invoices       Invoice[]
 }
 
 // Koppelt een gebruiker aan een stal met een rol (staf/eigenaar van de stal).
@@ -547,6 +553,10 @@ model Contract {
   // (contractId, @unique) staat op Lease.
   lease Lease?
 
+  // Facturen die uit dit contract voortkomen (Fact 01). Optionele bron; een factuur
+  // overleeft het verwijderen van zijn bron-contract (onDelete: SetNull op Invoice).
+  invoices Invoice[]
+
   @@index([horseId])
   @@index([stableId])
   @@index([counterpartyUserId])
@@ -778,4 +788,104 @@ model LeaseDagdeelClaim {
   @@unique([horseId, datum, dagdeel])
   @@index([horseId])
   @@index([userId])
+}
+
+// ── Facturatie (#145, Fact 01) ───────────────────────────────────────────────
+// Fundament voor de facturatie-module: de kern-entiteiten Invoice + InvoiceLine.
+// Stap 6 uit de bouwvolgorde (CLAUDE.md). Sluit de keten matching → contract →
+// administratie → facturatie rond het centrale paardprofiel. Bewust een puur
+// fundament-model: geen UI/actions/queries, geen factuurnummer-generatie of
+// statusovergangslogica — die volgen in Fact 02–07.
+//
+// Relaties:
+//   - stableId        → de uitgevende stal (afzender). onDelete: Cascade.
+//   - recipientUserId → de ontvanger (paardeigenaar/leaser). Nullable +
+//     onDelete: SetNull, zodat een factuur de verwijdering van het account overleeft
+//     (administratie/historie blijft behouden).
+//   - contractId      → optionele bron (stallings- of leasecontract). onDelete:
+//     SetNull, zodat de factuur het verwijderen van zijn bron-contract overleeft.
+//
+// Bedragen zijn gedenormaliseerd opgeslagen (subtotal/vatAmount/total) zodat een
+// factuur het bedrag op uitgiftemoment vastlegt; de berekening/optelling hoort in
+// een latere story (app-laag).
+model Invoice {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Uitgevende stal (afzender).
+  stableId String @db.Uuid
+  stable   Stable @relation(fields: [stableId], references: [id], onDelete: Cascade)
+
+  // Ontvanger (paardeigenaar/leaser). Nullable; factuur overleeft accountverwijdering.
+  recipientUserId String? @db.Uuid
+  recipient       User?   @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+
+  // Optionele bron (stallings-/leasecontract). Factuur overleeft contractverwijdering.
+  contractId String?   @db.Uuid
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  // Concept-facturen hebben nog geen definitief nummer; opvolgende nummering wordt
+  // pas in Fact 05 toegekend. @unique borgt dat dubbele nummers op DB-niveau
+  // onmogelijk zijn.
+  invoiceNumber String? @unique
+
+  // Nullable tot vastgesteld.
+  invoiceDate DateTime?
+  dueDate     DateTime?
+
+  status InvoiceStatus @default(CONCEPT)
+
+  // Totalen gedenormaliseerd vastgelegd (excl. btw / totale btw / incl. btw).
+  subtotal  Decimal @default(0) @db.Decimal(10, 2)
+  vatAmount Decimal @default(0) @db.Decimal(10, 2)
+  total     Decimal @default(0) @db.Decimal(10, 2)
+
+  // Vrije opmerking op de factuur.
+  notes String?
+
+  lines InvoiceLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stableId])
+  @@index([recipientUserId])
+  @@index([contractId])
+}
+
+// Eén factuurregel. Het btw-tarief staat per regel (vatRate), niet alleen op
+// factuurniveau. quantity is Decimal i.p.v. Int zodat deelperiodes (bv. halve
+// maanden) mogelijk zijn.
+model InvoiceLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  invoiceId String  @db.Uuid
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  description String
+  quantity    Decimal @db.Decimal(10, 2) // aantal (deelperiodes mogelijk)
+  unitPrice   Decimal @db.Decimal(10, 2) // stuksprijs excl. btw
+  vatRate     VatRate // btw-tarief per regel
+  lineTotal   Decimal @db.Decimal(10, 2) // regelbedrag excl. btw
+
+  // Bewaart de regelvolgorde stabiel.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+enum InvoiceStatus {
+  CONCEPT
+  VERZONDEN
+  BETAALD
+  VERVALLEN
+  GEANNULEERD
+}
+
+// Toegestane btw-tarieven. De numerieke percentages (0/9/21%) worden in de app-laag
+// aan de enum gekoppeld (latere story), niet als losse kolom.
+enum VatRate {
+  NUL  // 0%
+  LAAG // 9%
+  HOOG // 21%
 }
